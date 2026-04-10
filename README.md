@@ -2,19 +2,18 @@
 
 ## Preview
 
-
 <p align="center">
-  <img src="public/screenshots/Homescreen.png" width="45%" />
-  <img src="public/screenshots/summary.png" width="45%" />
+  <img src="screenshots/01-dashboard.png" width="45%" />
+  <img src="screenshots/02-summary.png" width="45%" />
 </p>
 
 <p align="center">
-  <img src="public/screenshots/nudges.png" width="45%" />
-  <img src="public/screenshots/searchbar.png" width="45%" />
+  <img src="screenshots/03-nudges.png" width="45%" />
+  <img src="screenshots/04-archive.png" width="45%" />
 </p>
 
 <p align="center">
-  <img src="public/screenshots/login.png" width="45%" />
+  <img src="screenshots/05-login.png" width="45%" />
 </p>
 
 **AI-powered emotional intelligence platform that transforms raw journaling into structured insight, behavioral patterns, and personalized reflection.**
