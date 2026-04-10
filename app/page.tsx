@@ -2,12 +2,15 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { AppFrame } from "@/components/AppFrame";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Atlas Journal | Home"
 };
 
 export default async function HomePage() {
+  const user = await getCurrentUser();
+
   return (
     <AppFrame
       title="Raw journaling in. Structured insight out."
@@ -15,12 +18,18 @@ export default async function HomePage() {
     >
       <section className="panel landing-choice-panel reveal-panel">
         <div className="cta-row landing-choice-row">
-          <Link href="/demo/dashboard" className="primary-button">
+          <Link href="/demo" className="primary-button">
             Try Demo
           </Link>
-          <Link href="/auth/sign-in" className="secondary-button">
-            Sign In
-          </Link>
+          {user ? (
+            <Link href="/journal" className="secondary-button">
+              Open My Journal
+            </Link>
+          ) : (
+            <Link href="/auth/sign-in" className="secondary-button">
+              Sign In
+            </Link>
+          )}
         </div>
       </section>
     </AppFrame>

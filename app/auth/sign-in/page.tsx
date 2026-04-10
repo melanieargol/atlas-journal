@@ -19,7 +19,7 @@ export default async function SignInPage() {
   return (
     <AppFrame
       title="Private journaling, synced to you"
-      description="Sign in with a magic link to keep your entries and insights connected to your account."
+      description="Sign in with a magic link to keep your entries, archive, and pattern dashboard clearly tied to your own account."
     >
       <AuthSignInForm />
     </AppFrame>

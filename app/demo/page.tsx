@@ -11,16 +11,37 @@ const analysisSteps = [
   "Generating insight..."
 ];
 
+const DEMO_INTRO_KEY = "atlas-journal-demo-intro-played";
 const TYPING_DURATION_MS = 1100;
 const TOTAL_DURATION_MS = 2800;
 
 export default function DemoPage() {
   const router = useRouter();
+  const [isReady, setIsReady] = useState(false);
   const [visibleChars, setVisibleChars] = useState(0);
   const [activeStep, setActiveStep] = useState(0);
   const [revealedShift, setRevealedShift] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const hasPlayed = window.sessionStorage.getItem(DEMO_INTRO_KEY) === "true";
+
+    if (hasPlayed) {
+      router.replace("/demo/dashboard");
+      return;
+    }
+
+    setIsReady(true);
+  }, [router]);
+
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
     const typingInterval = window.setInterval(() => {
       setVisibleChars((current) => {
         if (current >= journalLine.length) {
@@ -44,7 +65,10 @@ export default function DemoPage() {
     }, 360);
 
     const shiftTimeout = window.setTimeout(() => setRevealedShift(true), 1900);
-    const redirectTimeout = window.setTimeout(() => router.push("/demo/dashboard"), TOTAL_DURATION_MS);
+    const redirectTimeout = window.setTimeout(() => {
+      window.sessionStorage.setItem(DEMO_INTRO_KEY, "true");
+      router.replace("/demo/dashboard");
+    }, TOTAL_DURATION_MS);
 
     return () => {
       window.clearInterval(typingInterval);
@@ -52,12 +76,20 @@ export default function DemoPage() {
       window.clearTimeout(shiftTimeout);
       window.clearTimeout(redirectTimeout);
     };
-  }, [router]);
+  }, [isReady, router]);
 
   const typedText = useMemo(() => journalLine.slice(0, visibleChars), [visibleChars]);
 
   function skipIntro() {
-    router.push("/demo/dashboard");
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(DEMO_INTRO_KEY, "true");
+    }
+
+    router.replace("/demo/dashboard");
+  }
+
+  if (!isReady) {
+    return null;
   }
 
   return (

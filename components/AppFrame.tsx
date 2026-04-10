@@ -13,6 +13,7 @@ type AppFrameProps = {
 
 export async function AppFrame({ title, description, children, demoMode = false, demoNote }: AppFrameProps) {
   const user = await getCurrentUser();
+  const userEmail = user?.email ?? null;
 
   return (
     <div className="app-shell">
@@ -37,6 +38,12 @@ export async function AppFrame({ title, description, children, demoMode = false,
               <Link href="/journal">Journal</Link>
               <Link href="/dashboard">Dashboard</Link>
               <Link href="/archive">Archive</Link>
+              {userEmail ? (
+                <div className="session-chip" aria-label={`Signed in as ${userEmail}`}>
+                  <span className="session-label">Signed in</span>
+                  <strong>{userEmail}</strong>
+                </div>
+              ) : null}
               <form action="/auth/sign-out" method="post">
                 <button className="nav-button" type="submit">
                   Sign out
