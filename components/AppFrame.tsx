@@ -1,13 +1,17 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { getCurrentUser } from "@/lib/auth";
+
 type AppFrameProps = {
   title: string;
   description: string;
   children: ReactNode;
 };
 
-export function AppFrame({ title, description, children }: AppFrameProps) {
+export async function AppFrame({ title, description, children }: AppFrameProps) {
+  const user = await getCurrentUser();
+
   return (
     <div className="app-shell">
       <div className="background-haze haze-left" />
@@ -20,9 +24,20 @@ export function AppFrame({ title, description, children }: AppFrameProps) {
         </Link>
 
         <nav className="nav">
-          <Link href="/journal">Journal</Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/archive">Archive</Link>
+          {user ? (
+            <>
+              <Link href="/journal">Journal</Link>
+              <Link href="/dashboard">Dashboard</Link>
+              <Link href="/archive">Archive</Link>
+              <form action="/auth/sign-out" method="post">
+                <button className="nav-button" type="submit">
+                  Sign out
+                </button>
+              </form>
+            </>
+          ) : (
+            <Link href="/auth/sign-in">Sign in</Link>
+          )}
         </nav>
       </header>
 
@@ -34,6 +49,10 @@ export function AppFrame({ title, description, children }: AppFrameProps) {
         </section>
         {children}
       </main>
+
+      <Link href={user ? "/journal" : "/auth/sign-in"} className="floating-action" aria-label="Create a new journal entry">
+        +
+      </Link>
     </div>
   );
 }

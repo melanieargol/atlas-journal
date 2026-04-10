@@ -7,6 +7,7 @@ import { EnergyPatternsChart } from "@/components/EnergyPatternsChart";
 import { NudgePanel } from "@/components/NudgePanel";
 import { RestorativeInsights } from "@/components/RestorativeInsights";
 import { TriggerSourcesChart } from "@/components/TriggerSourcesChart";
+import { requireUser } from "@/lib/auth";
 import { getDashboardData } from "@/lib/db";
 import type { TimeRange } from "@/types/journal";
 
@@ -27,6 +28,7 @@ export default async function DashboardPage({
 }: {
   searchParams?: Promise<{ range?: string }>;
 }) {
+  await requireUser();
   const params = searchParams ? await searchParams : undefined;
   const range = getRangeFromSearchParams(params?.range);
   const { entries, emotionTrends, triggerSources, energyPatterns, recurringEmotions, restorativeInsights, allEntriesCount, reminderSnapshot } =

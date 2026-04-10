@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { AppFrame } from "@/components/AppFrame";
 import { ArchiveEntryList } from "@/components/ArchiveEntryList";
+import { requireUser } from "@/lib/auth";
 import { getArchiveEntries } from "@/lib/db";
 
 export const metadata: Metadata = {
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ArchivePage() {
+  await requireUser();
   const entries = await getArchiveEntries();
 
   return (

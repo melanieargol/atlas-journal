@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { analyzeEntry } from "@/lib/ai";
+import { getCurrentUser } from "@/lib/auth";
 import { saveEntry } from "@/lib/db";
 import { formatValidationError, validateAnalysis, validateAnalyzeEntryInput } from "@/lib/validators";
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+    }
+
     const body = await request.json();
     const input = validateAnalyzeEntryInput(body);
     const entryDate = input.entry_date ?? new Date().toISOString().slice(0, 10);

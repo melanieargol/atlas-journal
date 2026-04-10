@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AppFrame } from "@/components/AppFrame";
 import { ArchiveEntryDetail } from "@/components/ArchiveEntryDetail";
+import { requireUser } from "@/lib/auth";
 import { getEntryById } from "@/lib/db";
 
 export const metadata: Metadata = {
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ArchiveEntryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireUser();
   const { id } = await params;
   const entry = await getEntryById(id);
 

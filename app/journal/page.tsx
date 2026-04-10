@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 
 import { AppFrame } from "@/components/AppFrame";
 import { JournalEntryForm } from "@/components/JournalEntryForm";
+import { requireUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Atlas Journal | Journal"
 };
 
-export default function JournalPage() {
+export default async function JournalPage() {
+  await requireUser();
+
   return (
     <AppFrame
       title="Journal entry analysis"
