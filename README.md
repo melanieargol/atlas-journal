@@ -1,22 +1,60 @@
 # Atlas Journal
 
-Atlas Journal is a Next.js + TypeScript MVP for turning raw journal entries into structured emotional insight. It keeps the original writing intact, validates the extracted analysis with Zod, saves the result to a local JSON file, and visualizes trends in a clean emotional-intelligence dashboard.
+```md
+## Preview
 
-## What this MVP includes
 
-- Journal entry form
-- Analysis API route
-- Results card showing raw text plus extracted insights
-- Dashboard with 3 charts:
-  - Emotion Trends
-  - Trigger Sources
-  - Energy Patterns
-- Journal archive with entry detail pages
-- Time range filtering for dashboard trends
-- Restorative insights based on saved entries
-- Local JSON persistence
-- Seed data for immediate testing
-- Automatic mock analysis when `OPENAI_API_KEY` is missing
+**AI-powered emotional intelligence platform that transforms raw journaling into structured insight, behavioral patterns, and personalized reflection.**
+
+Atlas Journal goes beyond storing text — it builds a **data pipeline from human emotion → structured data → meaningful feedback.**
+
+---
+
+## 🧠 What makes this different
+
+Most journaling apps:
+- store entries  
+- maybe show mood charts  
+
+**Atlas Journal:**
+- extracts emotional signals from unstructured writing  
+- identifies patterns over time  
+- surfaces *behavioral insights*  
+- reinforces positive habits through personalized nudges  
+
+👉 It turns reflection into **actionable self-awareness**
+
+---
+
+## ⚙️ Core capabilities
+
+- ✍️ Free-form journaling (raw input)
+- 🧠 AI-powered emotional analysis
+- 📊 Trend tracking (emotion, stress, energy)
+- 🔍 Search + archive system
+- 🧭 Pattern recognition (triggers, coping, themes)
+- 💡 Restorative insights (what helps vs. harms)
+- 🔁 Behavioral nudges based on user patterns
+- 🔐 Secure user authentication (Supabase)
+- ☁️ User-scoped cloud data storage
+
+---
+
+## 🧩 Data pipeline
+
+```text
+Raw Journal Entry
+        ↓
+AI Extraction Layer
+        ↓
+Structured Emotional Schema
+        ↓
+User-Scoped Storage (Supabase)
+        ↓
+Aggregation + Trend Analysis
+        ↓
+Insights + Nudges + Dashboard
+
 
 ## Source of truth files
 
