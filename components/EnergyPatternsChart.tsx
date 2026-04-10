@@ -6,10 +6,10 @@ import type { EnergyPatternDatum } from "@/types/journal";
 
 export function EnergyPatternsChart({ data }: { data: EnergyPatternDatum[] }) {
   return (
-    <section className="panel chart-panel">
+    <section className="panel chart-panel reveal-panel">
       <div className="section-head">
         <div>
-          <p className="section-label">Chart 3</p>
+          <p className="section-label">Recovery rhythm</p>
           <h2>Energy Patterns</h2>
         </div>
       </div>

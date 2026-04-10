@@ -150,6 +150,251 @@
           "overall": 0.87
         }
       }
+    },
+    {
+      "id": "demo_004",
+      "entry_date": "2026-03-30",
+      "created_at": "2026-03-30T19:10:00.000Z",
+      "analysis": {
+        "raw_text": "I spent the evening sketching after work and felt myself loosen up. I had been mentally scattered most of the day, but making something with my hands helped me settle and actually feel proud of how I used the night.",
+        "summary": "Creative time helped turn a scattered day into a more grounded and proud evening.",
+        "primary_emotion": "proud",
+        "secondary_emotions": ["scattered", "settled", "grounded"],
+        "joy_sources": ["sketching", "making something with my hands"],
+        "gratitude_moments": ["having the evening to myself"],
+        "wins": ["followed through on something creative", "used the evening intentionally"],
+        "what_to_repeat": ["sketching after work", "creative wind-down time"],
+        "triggers": [
+          {
+            "type": "work",
+            "description": "The workday left behind mental clutter and low focus."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "spent the evening sketching",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "positive",
+          "score": 0.41
+        },
+        "mood_score": 7,
+        "stress_level": 4,
+        "energy_level": 6,
+        "energy_direction": "restorative",
+        "emotional_shift": {
+          "start_state": "scattered",
+          "end_state": "proud",
+          "direction": "improved"
+        },
+        "themes": ["creative recovery", "after-work reset", "self-respect"],
+        "notable_phrases": ["felt myself loosen up", "helped me settle", "feel proud"],
+        "reflection_tags": ["creative energy", "evening rhythm", "momentum"],
+        "confidence": {
+          "primary_emotion": 0.87,
+          "triggers": 0.73,
+          "coping_actions": 0.94,
+          "overall": 0.89
+        }
+      }
+    },
+    {
+      "id": "demo_005",
+      "entry_date": "2026-03-27",
+      "created_at": "2026-03-27T21:05:00.000Z",
+      "analysis": {
+        "raw_text": "Dinner with my sister felt easy in a way I really needed. I went in carrying stress from the week, but by the time I got home I felt lighter and more connected.",
+        "summary": "A relaxed family dinner softened a stressful week and left a stronger sense of connection.",
+        "primary_emotion": "connected",
+        "secondary_emotions": ["stressed", "lighter", "relieved"],
+        "joy_sources": ["time with my sister", "easy conversation"],
+        "gratitude_moments": ["feeling supported by family"],
+        "wins": ["accepted connection instead of isolating"],
+        "what_to_repeat": ["make time for dinner with family", "choose easy connection after a hard week"],
+        "triggers": [
+          {
+            "type": "work",
+            "description": "Stress from the week was still lingering before dinner."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "had dinner with my sister",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "positive",
+          "score": 0.53
+        },
+        "mood_score": 8,
+        "stress_level": 3,
+        "energy_level": 7,
+        "energy_direction": "restorative",
+        "emotional_shift": {
+          "start_state": "stressed",
+          "end_state": "connected",
+          "direction": "improved"
+        },
+        "themes": ["family support", "connection", "emotional recovery"],
+        "notable_phrases": ["felt easy", "felt lighter", "more connected"],
+        "reflection_tags": ["support", "belonging", "weekly reset"],
+        "confidence": {
+          "primary_emotion": 0.9,
+          "triggers": 0.7,
+          "coping_actions": 0.95,
+          "overall": 0.91
+        }
+      }
+    },
+    {
+      "id": "demo_006",
+      "entry_date": "2026-03-24",
+      "created_at": "2026-03-24T06:55:00.000Z",
+      "analysis": {
+        "raw_text": "I started the morning with a run before checking my phone and it changed the whole pace of the day. I still had a lot to do, but I felt more capable and less reactive.",
+        "summary": "A strong morning routine created a steadier, more capable tone for the rest of the day.",
+        "primary_emotion": "capable",
+        "secondary_emotions": ["busy", "steady", "less reactive"],
+        "joy_sources": ["running", "starting the day intentionally"],
+        "gratitude_moments": ["having time before the day sped up"],
+        "wins": ["protected the morning", "showed up for the routine"],
+        "what_to_repeat": ["run before checking my phone", "protect the first hour"],
+        "triggers": [
+          {
+            "type": "environment",
+            "description": "A busy schedule could have made the day feel reactive."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "went for a run before checking my phone",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "positive",
+          "score": 0.47
+        },
+        "mood_score": 8,
+        "stress_level": 4,
+        "energy_level": 8,
+        "energy_direction": "restorative",
+        "emotional_shift": {
+          "start_state": "uncertain",
+          "end_state": "capable",
+          "direction": "improved"
+        },
+        "themes": ["morning rhythm", "energy building", "intentional focus"],
+        "notable_phrases": ["changed the whole pace", "felt more capable", "less reactive"],
+        "reflection_tags": ["momentum", "routine", "focus"],
+        "confidence": {
+          "primary_emotion": 0.88,
+          "triggers": 0.68,
+          "coping_actions": 0.95,
+          "overall": 0.9
+        }
+      }
+    },
+    {
+      "id": "demo_007",
+      "entry_date": "2026-03-20",
+      "created_at": "2026-03-20T23:15:00.000Z",
+      "analysis": {
+        "raw_text": "I felt off all afternoon after an awkward conversation with a friend. Nothing dramatic happened, but I kept replaying it and second-guessing myself. Writing it out tonight helped me stop spiraling.",
+        "summary": "An awkward conversation lingered longer than expected, and writing helped interrupt the mental replay.",
+        "primary_emotion": "uneasy",
+        "secondary_emotions": ["self-conscious", "stuck", "clearer"],
+        "joy_sources": [],
+        "gratitude_moments": ["having a way to process the day"],
+        "wins": ["wrote instead of staying in the spiral"],
+        "what_to_repeat": ["write when replaying conversations", "name the spiral sooner"],
+        "triggers": [
+          {
+            "type": "relationship",
+            "description": "An awkward interaction with a friend kept resurfacing mentally."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "wrote it out at night",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "mixed",
+          "score": -0.12
+        },
+        "mood_score": 5,
+        "stress_level": 6,
+        "energy_level": 4,
+        "energy_direction": "mixed",
+        "emotional_shift": {
+          "start_state": "uneasy",
+          "end_state": "clearer",
+          "direction": "improved"
+        },
+        "themes": ["relationship sensitivity", "rumination", "writing as regulation"],
+        "notable_phrases": ["kept replaying it", "second-guessing myself", "helped me stop spiraling"],
+        "reflection_tags": ["social tension", "processing", "self-trust"],
+        "confidence": {
+          "primary_emotion": 0.83,
+          "triggers": 0.89,
+          "coping_actions": 0.92,
+          "overall": 0.87
+        }
+      }
+    },
+    {
+      "id": "demo_008",
+      "entry_date": "2026-03-16",
+      "created_at": "2026-03-16T13:40:00.000Z",
+      "analysis": {
+        "raw_text": "I spent part of lunch outside and realized how compressed I’ve been feeling. It wasn’t a huge breakthrough, but the pause gave me enough room to breathe and stop rushing myself.",
+        "summary": "A short outdoor break created enough space to notice the pressure and soften it.",
+        "primary_emotion": "relieved",
+        "secondary_emotions": ["compressed", "rushed", "spacious"],
+        "joy_sources": ["being outside", "slowing down at lunch"],
+        "gratitude_moments": ["having a brief pause in the middle of the day"],
+        "wins": ["stepped away before the stress escalated"],
+        "what_to_repeat": ["go outside at lunch", "use short pauses earlier"],
+        "triggers": [
+          {
+            "type": "work",
+            "description": "The pace of the day had started to feel compressed and rushed."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "spent lunch outside",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "mixed",
+          "score": 0.18
+        },
+        "mood_score": 6,
+        "stress_level": 5,
+        "energy_level": 5,
+        "energy_direction": "restorative",
+        "emotional_shift": {
+          "start_state": "compressed",
+          "end_state": "relieved",
+          "direction": "improved"
+        },
+        "themes": ["outdoor reset", "midday recovery", "pressure awareness"],
+        "notable_phrases": ["felt compressed", "room to breathe", "stop rushing myself"],
+        "reflection_tags": ["pause", "breathing room", "reset"],
+        "confidence": {
+          "primary_emotion": 0.82,
+          "triggers": 0.79,
+          "coping_actions": 0.93,
+          "overall": 0.86
+        }
+      }
     }
   ]
 }

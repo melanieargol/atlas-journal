@@ -106,7 +106,7 @@ export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: 
 
       {groupedEntries.length > 0 ? (
         groupedEntries.map(([label, items]) => (
-          <section key={label} className="archive-group">
+          <section key={label} className="archive-group reveal-panel">
             <div className="archive-group-head">
               <p className="section-label">Date group</p>
               <h2 className="archive-group-title">{label}</h2>
@@ -121,7 +121,10 @@ export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: 
                   </div>
                   <h2 className="archive-title">{entry.summary}</h2>
                   <p className="muted-text archive-preview">{entry.preview}{entry.preview.length >= 160 ? "..." : ""}</p>
-                  <p className="muted-text">Primary emotion: {entry.primary_emotion}</p>
+                  <div className="archive-meta-row">
+                    <span className="emotion-badge">{entry.primary_emotion}</span>
+                    <span className="archive-open-hint">Open entry</span>
+                  </div>
                   <div className="tag-row">
                     {entry.themes.slice(0, 3).map((theme) => (
                       <span key={theme} className="tag">

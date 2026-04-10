@@ -6,10 +6,10 @@ import type { EmotionTrendDatum } from "@/types/journal";
 
 export function EmotionTrendsChart({ data }: { data: EmotionTrendDatum[] }) {
   return (
-    <section className="panel chart-panel">
+    <section className="panel chart-panel reveal-panel">
       <div className="section-head">
         <div>
-          <p className="section-label">Chart 1</p>
+          <p className="section-label">Mood and strain</p>
           <h2>Emotion Trends</h2>
         </div>
       </div>
@@ -27,8 +27,8 @@ export function EmotionTrendsChart({ data }: { data: EmotionTrendDatum[] }) {
                 borderRadius: 18
               }}
             />
-            <Line type="monotone" dataKey="mood_score" stroke="#f2a84b" strokeWidth={3} dot={{ r: 4 }} />
-            <Line type="monotone" dataKey="stress_level" stroke="#7db2ff" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="mood_score" stroke="#9fd8ff" strokeWidth={3} dot={{ r: 4, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="stress_level" stroke="#f2a84b" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 4 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

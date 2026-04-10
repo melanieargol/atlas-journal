@@ -8,10 +8,10 @@ const colors = ["#f2a84b", "#7db2ff", "#5dd2c1", "#d08cff", "#ff7ea8"];
 
 export function TriggerSourcesChart({ data }: { data: TriggerFrequencyDatum[] }) {
   return (
-    <section className="panel chart-panel">
+    <section className="panel chart-panel reveal-panel">
       <div className="section-head">
         <div>
-          <p className="section-label">Chart 2</p>
+          <p className="section-label">Recurring sources</p>
           <h2>Trigger Sources</h2>
         </div>
       </div>

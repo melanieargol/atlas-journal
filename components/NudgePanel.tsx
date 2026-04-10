@@ -2,7 +2,7 @@ import type { ReminderSnapshot } from "@/types/journal";
 
 export function NudgePanel({ snapshot }: { snapshot: ReminderSnapshot }) {
   return (
-    <section className="panel nudges-panel">
+    <section className="panel nudges-panel reveal-panel">
       <div className="section-head">
         <div>
           <p className="section-label">Smart nudges</p>

@@ -112,6 +112,45 @@ function buildArchiveItems(entries: JournalRecord[]): ArchiveListItem[] {
   }));
 }
 
+export function getEmotionColor(emotion: string) {
+  const key = emotion.toLowerCase();
+
+  if (["proud", "capable", "connected", "hopeful", "relieved", "calmer"].includes(key)) {
+    return "#5dd2c1";
+  }
+
+  if (["overwhelmed", "anxious", "tense", "uneasy", "stressed"].includes(key)) {
+    return "#f2a84b";
+  }
+
+  if (["drained", "tired", "heavy", "slow"].includes(key)) {
+    return "#7db2ff";
+  }
+
+  return "#c68cff";
+}
+
+export function getDemoEmotionCloud(entries: JournalRecord[]) {
+  const counts = new Map<string, number>();
+
+  for (const entry of entries) {
+    counts.set(entry.analysis.primary_emotion, (counts.get(entry.analysis.primary_emotion) ?? 0) + 1);
+
+    for (const emotion of entry.analysis.secondary_emotions) {
+      counts.set(emotion, (counts.get(emotion) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([emotion, count]) => ({
+      emotion,
+      count,
+      color: getEmotionColor(emotion)
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 16);
+}
+
 export async function getDemoEntries() {
   return [...demoDatabase.entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
 }
@@ -128,6 +167,10 @@ export async function getDemoArchiveEntries() {
 
 export async function getDemoDashboardData(range: TimeRange = "all") {
   const allEntries = await getDemoEntries();
+  return buildDemoDashboardData(allEntries, range);
+}
+
+export function buildDemoDashboardData(allEntries: JournalRecord[], range: TimeRange = "all") {
   const entries = filterEntriesByRange(allEntries, range);
 
   const emotionCounts = new Map<string, number>();
@@ -172,6 +215,7 @@ export async function getDemoDashboardData(range: TimeRange = "all") {
     triggerSources,
     energyPatterns,
     recurringEmotions,
+    emotionCloud: getDemoEmotionCloud(entries),
     restorativeInsights: buildRestorativeInsights(entries),
     reminderSnapshot: buildReminderSnapshot(allEntries)
   };

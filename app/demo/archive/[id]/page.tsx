@@ -22,9 +22,10 @@ export default async function DemoArchiveEntryDetailPage({ params }: { params: P
       title="Entry detail preview"
       description="This read-only detail view shows the original journal writing alongside the structured analysis so the emotional insights stay grounded in real language."
       demoMode
-      demoNote="Preview seeded sample entries and insights"
+      demoNote="sample data"
     >
       <ArchiveEntryDetail entry={entry} readOnly />
     </AppFrame>
   );
 }
+

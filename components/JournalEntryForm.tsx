@@ -64,7 +64,7 @@ export function JournalEntryForm() {
         <div className="section-head">
           <div>
             <p className="section-label">Journal form</p>
-            <h2>Capture the entry before you interpret it.</h2>
+            <h2>Write first, then let the patterns emerge.</h2>
           </div>
           <div className="entry-stats">
             <span>{wordCount} words</span>
@@ -102,9 +102,7 @@ export function JournalEntryForm() {
           <button className="primary-button" type="button" onClick={handleSubmit} disabled={isPending}>
             {isPending ? "Analyzing..." : "Analyze Entry"}
           </button>
-          <p className="muted-text">
-            If no `OPENAI_API_KEY` is available, Atlas Journal uses a mock analysis automatically.
-          </p>
+          <p className="muted-text">The original entry stays intact while Atlas Journal adds structured insight alongside it.</p>
         </div>
 
         {error ? <div className="error-box">{error}</div> : null}

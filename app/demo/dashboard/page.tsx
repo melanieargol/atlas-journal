@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
 import { AppFrame } from "@/components/AppFrame";
+import { DashboardSignatureHero } from "@/components/DashboardSignatureHero";
 import { DashboardRangeFilter } from "@/components/DashboardRangeFilter";
+import { DemoRecentEntries } from "@/components/DemoRecentEntries";
 import { EmotionTrendsChart } from "@/components/EmotionTrendsChart";
 import { EnergyPatternsChart } from "@/components/EnergyPatternsChart";
 import { NudgePanel } from "@/components/NudgePanel";
@@ -31,47 +33,66 @@ export default async function DemoDashboardPage({
   const range = getRangeFromSearchParams(params?.range);
   const { entries, emotionTrends, triggerSources, energyPatterns, recurringEmotions, restorativeInsights, allEntriesCount, reminderSnapshot } =
     await getDemoDashboardData(range);
+  const spotlightEntry = entries.find((entry) => entry.analysis.emotional_shift.start_state !== entry.analysis.emotional_shift.end_state) ?? entries[0];
 
   return (
     <AppFrame
-      title="Dashboard preview"
-      description="Start with the clearest product story: recurring emotions, trigger patterns, energy movement, nudges, and restorative signals surfaced from seeded sample entries."
+      title="Pattern dashboard"
+      description="See the strongest product story first: emotional movement, recurring strain, restorative signals, and the journal entries behind them."
       demoMode
-      demoNote="Preview seeded sample entries and insights"
+      demoNote="sample data"
     >
-      <section className="overview-grid">
-        <article className="panel intro-panel">
-          <p className="section-label">Demo flow</p>
-          <h2>The most important story appears first</h2>
-          <p className="muted-text">
-            This showcase begins with the dashboard so visitors can understand the product in seconds, then move into the archive and entry detail views for the underlying journal context.
-          </p>
-        </article>
-
-        <article className="panel metric-panel">
-          <p className="section-label">Entries in range</p>
-          <strong>{entries.length}</strong>
-          <span className="muted-text">{range === "all" ? "all demo entries" : `from ${allEntriesCount} demo entries`}</span>
-        </article>
-
-        <article className="panel metric-panel">
-          <p className="section-label">Most common emotion</p>
-          <strong>{recurringEmotions[0]?.emotion ?? "n/a"}</strong>
-          <span className="muted-text">{recurringEmotions[0]?.count ?? 0} times</span>
-        </article>
-
-        <article className="panel metric-panel">
-          <p className="section-label">Most common trigger</p>
-          <strong>{triggerSources[0]?.label ?? "n/a"}</strong>
-          <span className="muted-text">{triggerSources[0]?.count ?? 0} times</span>
-        </article>
-      </section>
+      <DashboardSignatureHero
+        eyebrow="Try this"
+        title="One entry becomes a visible emotional pattern."
+        description="The dashboard is the fastest way to understand Atlas Journal: recurring feelings, repeated trigger sources, and moments where the tone of an entry visibly shifts."
+        spotlight={{
+          label: "Signature moment",
+          before: spotlightEntry?.analysis.emotional_shift.start_state ?? "tense",
+          after: spotlightEntry?.analysis.emotional_shift.end_state ?? "reflective",
+          summary:
+            spotlightEntry?.analysis.summary ??
+            "Open any entry next and you can see the original language sitting beside the structured insight."
+        }}
+        metrics={[
+          {
+            label: "Entries in range",
+            value: String(entries.length),
+            supporting: range === "all" ? "all demo entries" : `from ${allEntriesCount} demo entries`,
+            tone: "cool"
+          },
+          {
+            label: "Most common emotion",
+            value: recurringEmotions[0]?.emotion ?? "n/a",
+            count: recurringEmotions[0]?.count ?? 0,
+            suffix: " times",
+            supporting: "the feeling that appears most often in this sample",
+            tone: "warm"
+          },
+          {
+            label: "Most common trigger",
+            value: triggerSources[0]?.label ?? "n/a",
+            count: triggerSources[0]?.count ?? 0,
+            suffix: " times",
+            supporting: "the pressure source that repeats most in the demo",
+            tone: "uplift"
+          }
+        ]}
+        actions={[
+          { href: "#recent-entries", label: "Open a recent entry", kind: "primary" },
+          { href: "/demo/archive", label: "Explore archive", kind: "secondary" }
+        ]}
+      />
 
       <DashboardRangeFilter activeRange={range} basePath="/demo/dashboard" />
 
+      <div id="recent-entries">
+        <DemoRecentEntries entries={entries.slice(0, 3)} />
+      </div>
+
       <NudgePanel snapshot={reminderSnapshot} />
 
-      <section className="charts-grid">
+      <section id="demo-charts" className="charts-grid reveal-group">
         <EmotionTrendsChart data={emotionTrends} />
         <TriggerSourcesChart data={triggerSources} />
         <EnergyPatternsChart data={energyPatterns} />
@@ -81,3 +102,4 @@ export default async function DemoDashboardPage({
     </AppFrame>
   );
 }
+

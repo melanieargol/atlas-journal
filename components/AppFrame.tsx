@@ -55,7 +55,7 @@ export async function AppFrame({ title, description, children, demoMode = false,
           {demoMode ? (
             <div className="demo-pill-row">
               <span className="demo-badge">Demo mode</span>
-              {demoNote ? <span className="demo-note">{demoNote}</span> : null}
+              {demoNote ? <span className="demo-note" aria-hidden="true">{demoNote}</span> : null}
             </div>
           ) : null}
           <h1>{title}</h1>

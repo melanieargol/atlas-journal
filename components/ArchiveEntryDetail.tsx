@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -120,15 +121,12 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
 
         {readOnly ? (
           <div className="entry-management-row">
-            <button className="secondary-button button-disabled" type="button" disabled>
-              Edit entry
-            </button>
-            <button className="danger-button button-disabled" type="button" disabled>
-              Delete entry
-            </button>
             <p className="muted-text demo-action-note">
               Demo mode is view-only. You can explore the entry, search the archive, and review insights here. Sign in to save, edit, or delete entries in a private account.
             </p>
+            <Link href="/auth/sign-in" className="secondary-button">
+              Sign in to create your own entries
+            </Link>
           </div>
         ) : (
           <div className="entry-management-row">
@@ -206,7 +204,9 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
         </section>
       ) : null}
 
-      <ResultsCard analysis={currentEntry.analysis} />
+      <div className="reveal-panel">
+        <ResultsCard analysis={currentEntry.analysis} />
+      </div>
     </div>
   );
 }

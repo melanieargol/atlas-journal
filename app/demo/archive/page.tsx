@@ -16,7 +16,7 @@ export default async function DemoArchivePage() {
       title="Archive preview"
       description="Explore the seeded archive exactly the way a recruiter or product reviewer would: search across summaries, themes, and emotions, then open any entry for the full context."
       demoMode
-      demoNote="Preview seeded sample entries and insights"
+      demoNote="sample data"
     >
       <section className="overview-grid">
         <article className="panel intro-panel">
@@ -38,3 +38,4 @@ export default async function DemoArchivePage() {
     </AppFrame>
   );
 }
+

@@ -2,11 +2,11 @@ import type { RestorativeInsight } from "@/types/journal";
 
 export function RestorativeInsights({ insights }: { insights: RestorativeInsight[] }) {
   return (
-    <section className="panel insights-panel">
+    <section className="panel insights-panel reveal-panel">
       <div className="section-head">
         <div>
           <p className="section-label">Restorative insights</p>
-          <h2>What seems to help when things begin to shift</h2>
+          <h2>What seems to help when the tone of a day starts to soften</h2>
         </div>
       </div>
 
