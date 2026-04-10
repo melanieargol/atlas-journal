@@ -118,10 +118,14 @@ select {
   position: sticky;
   top: 0;
   z-index: 20;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px clamp(18px, 4vw, 42px);
+
+  min-height: 120px; /* 🔥 THIS is the key */
+
+  padding: 12px 20px;
   background: rgba(8, 11, 18, 0.78);
   backdrop-filter: blur(22px);
   border-bottom: 1px solid rgba(174, 182, 217, 0.08);
@@ -141,6 +145,28 @@ select {
   border-radius: 999px;
   background: linear-gradient(135deg, var(--accent-amber), var(--accent-blue));
   box-shadow: 0 0 20px rgba(125, 178, 255, 0.35);
+}
+
+.brand-logo {
+  display: block;
+  height: 120px;  /* 🔥 visually large but controlled */
+  width: auto;
+  object-fit: contain;
+  transform: translateY(4px);
+
+  transition: transform 180ms ease, filter 220ms ease;
+  filter: drop-shadow(0 6px 18px rgba(245, 176, 76, 0.18));
+}
+
+.brand-link:hover .brand-logo {
+  transform: translateY(-1px) scale(1.02);
+
+  filter:
+    drop-shadow(0 10px 28px rgba(245, 176, 76, 0.25))
+    drop-shadow(0 0 12px rgba(125, 178, 255, 0.18));
+}
+.brand-link {
+  margin-left: 30px;
 }
 
 .nav {

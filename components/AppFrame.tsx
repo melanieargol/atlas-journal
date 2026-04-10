@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { getCurrentUser } from "@/lib/auth";
 
+import Image from "next/image";
+
 type AppFrameProps = {
   title: string;
   description: string;
@@ -21,11 +23,21 @@ export async function AppFrame({ title, description, children, demoMode = false,
       <div className="background-haze haze-right" />
 
       <header className="topbar">
-        <Link href="/" className="brand">
-          <span className="brand-dot" />
-          <span>Atlas Journal</span>
+        <Link
+          href="/"
+          className="brand brand-link"
+          aria-label="Go to Atlas Journal home"
+        >
+          <Image
+            src="/images/atlas-logo.png"
+            alt="Atlas Journal"
+            width={150}
+            height={170}
+            className="brand-logo"
+            priority
+          />
         </Link>
-
+          
         <nav className="nav">
           {demoMode ? (
             <>
