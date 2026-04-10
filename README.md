@@ -1,6 +1,5 @@
 # Atlas Journal
 
-```md
 ## Preview
 
 
@@ -54,7 +53,7 @@ User-Scoped Storage (Supabase)
 Aggregation + Trend Analysis
         ↓
 Insights + Nudges + Dashboard
-
+```
 
 ## Source of truth files
 
