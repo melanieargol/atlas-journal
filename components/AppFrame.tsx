@@ -7,9 +7,11 @@ type AppFrameProps = {
   title: string;
   description: string;
   children: ReactNode;
+  demoMode?: boolean;
+  demoNote?: string;
 };
 
-export async function AppFrame({ title, description, children }: AppFrameProps) {
+export async function AppFrame({ title, description, children, demoMode = false, demoNote }: AppFrameProps) {
   const user = await getCurrentUser();
 
   return (
@@ -24,7 +26,13 @@ export async function AppFrame({ title, description, children }: AppFrameProps) 
         </Link>
 
         <nav className="nav">
-          {user ? (
+          {demoMode ? (
+            <>
+              <Link href="/demo/dashboard">Dashboard</Link>
+              <Link href="/demo/archive">Archive</Link>
+              {user ? <Link href="/dashboard">My account</Link> : <Link href="/auth/sign-in">Sign in</Link>}
+            </>
+          ) : user ? (
             <>
               <Link href="/journal">Journal</Link>
               <Link href="/dashboard">Dashboard</Link>
@@ -44,13 +52,23 @@ export async function AppFrame({ title, description, children }: AppFrameProps) 
       <main className="page">
         <section className="hero">
           <p className="eyebrow">Emotional intelligence lab</p>
+          {demoMode ? (
+            <div className="demo-pill-row">
+              <span className="demo-badge">Demo mode</span>
+              {demoNote ? <span className="demo-note">{demoNote}</span> : null}
+            </div>
+          ) : null}
           <h1>{title}</h1>
           <p className="hero-copy">{description}</p>
         </section>
         {children}
       </main>
 
-      <Link href={user ? "/journal" : "/auth/sign-in"} className="floating-action" aria-label="Create a new journal entry">
+      <Link
+        href={demoMode ? "/auth/sign-in" : user ? "/journal" : "/auth/sign-in"}
+        className="floating-action"
+        aria-label={demoMode ? "Sign in for your private account" : "Create a new journal entry"}
+      >
         +
       </Link>
     </div>

@@ -9,7 +9,7 @@ const options: { value: TimeRange; label: string }[] = [
   { value: "all", label: "All time" }
 ];
 
-export function DashboardRangeFilter({ activeRange }: { activeRange: TimeRange }) {
+export function DashboardRangeFilter({ activeRange, basePath = "/dashboard" }: { activeRange: TimeRange; basePath?: string }) {
   return (
     <section className="panel filter-panel">
       <div className="section-head compact-head">
@@ -23,7 +23,7 @@ export function DashboardRangeFilter({ activeRange }: { activeRange: TimeRange }
         {options.map((option) => (
           <Link
             key={option.value}
-            href={`/dashboard?range=${option.value}`}
+            href={`${basePath}?range=${option.value}`}
             className={option.value === activeRange ? "filter-chip filter-chip-active" : "filter-chip"}
           >
             {option.label}

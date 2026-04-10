@@ -131,6 +131,38 @@ select {
   margin-bottom: 28px;
 }
 
+.demo-pill-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.demo-badge,
+.demo-note {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 8px 12px;
+  border: 1px solid rgba(174, 182, 217, 0.14);
+}
+
+.demo-badge {
+  background: linear-gradient(135deg, rgba(242, 168, 75, 0.18), rgba(125, 178, 255, 0.16));
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.demo-note {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.86rem;
+}
+
 .eyebrow,
 .section-label {
   margin: 0 0 10px;
@@ -619,6 +651,21 @@ select {
   flex-wrap: wrap;
   align-items: center;
   margin-top: 16px;
+}
+
+.button-disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button-disabled:hover {
+  transform: none;
+}
+
+.demo-action-note {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .confirm-delete-row {

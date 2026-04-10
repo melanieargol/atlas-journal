@@ -1,14 +1,10 @@
-import { promises as fs } from "fs";
-import path from "path";
-
-import sampleEntries from "@/data/sampleEntries.json";
+import { createClient } from "@/lib/supabase/server";
 import { buildReminderSnapshot } from "@/lib/nudges";
 import {
   confidenceSchema,
   copingActionSchema,
   emotionalShiftSchema,
   journalAnalysisSchema,
-  journalDatabaseSchema,
   sentimentSchema,
   triggerSchema
 } from "@/lib/schema";
@@ -23,8 +19,13 @@ import type {
   TriggerFrequencyDatum
 } from "@/types/journal";
 
-const dataDir = path.join(process.cwd(), "data");
-const dbPath = path.join(dataDir, "journalEntries.json");
+type JournalEntryRow = {
+  id: string;
+  user_id: string;
+  entry_date: string;
+  created_at: string;
+  analysis: unknown;
+};
 
 function collectValidItems<T>(items: unknown, parser: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }) {
   if (!Array.isArray(items)) {
@@ -165,81 +166,124 @@ function normalizeRecord(input: unknown): JournalRecord | null {
   };
 }
 
-async function ensureDatabase() {
-  await fs.mkdir(dataDir, { recursive: true });
+async function getScopedClient() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error
+  } = await supabase.auth.getUser();
 
-  try {
-    await fs.access(dbPath);
-  } catch {
-    await fs.writeFile(dbPath, JSON.stringify(sampleEntries, null, 2), "utf8");
-  }
-}
-
-async function readDatabase() {
-  await ensureDatabase();
-  const contents = await fs.readFile(dbPath, "utf8");
-  const parsed = JSON.parse(contents) as { entries?: unknown[] };
-  const normalizedEntries = Array.isArray(parsed.entries) ? parsed.entries.map(normalizeRecord).filter((entry): entry is JournalRecord => entry !== null) : [];
-  const normalizedDatabase = journalDatabaseSchema.parse({ entries: normalizedEntries });
-
-  if (JSON.stringify(parsed) !== JSON.stringify(normalizedDatabase)) {
-    await writeDatabase(normalizedDatabase.entries);
+  if (error) {
+    throw new Error(error.message);
   }
 
-  return normalizedDatabase;
+  if (!user) {
+    throw new Error("Authentication required.");
+  }
+
+  return { supabase, user };
 }
 
-async function writeDatabase(entries: JournalRecord[]) {
-  await fs.writeFile(dbPath, JSON.stringify({ entries }, null, 2), "utf8");
+function mapRowsToRecords(rows: JournalEntryRow[] | null | undefined) {
+  if (!rows) {
+    return [] as JournalRecord[];
+  }
+
+  return rows.map(normalizeRecord).filter((entry): entry is JournalRecord => entry !== null);
+}
+
+async function fetchEntriesForUser() {
+  const { supabase, user } = await getScopedClient();
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select("id, user_id, entry_date, created_at, analysis")
+    .eq("user_id", user.id)
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Unable to load journal entries: ${error.message}`);
+  }
+
+  return mapRowsToRecords((data ?? []) as JournalEntryRow[]);
 }
 
 export async function getEntries() {
-  const database = await readDatabase();
-  return database.entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+  return fetchEntriesForUser();
 }
 
 export async function saveEntry(analysis: JournalAnalysis, entryDate: string) {
-  const existing = await getEntries();
-  const record: JournalRecord = {
-    id: `entry_${Date.now()}`,
-    entry_date: entryDate,
-    created_at: new Date().toISOString(),
-    analysis
-  };
+  const { supabase, user } = await getScopedClient();
+  const createdAt = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .insert({
+      user_id: user.id,
+      entry_date: entryDate,
+      created_at: createdAt,
+      analysis
+    })
+    .select("id, user_id, entry_date, created_at, analysis")
+    .single();
 
-  await writeDatabase([record, ...existing]);
-  return record;
+  if (error) {
+    throw new Error(`Unable to save journal entry: ${error.message}`);
+  }
+
+  const normalized = normalizeRecord(data);
+
+  if (!normalized) {
+    throw new Error("Saved journal entry did not match the expected record shape.");
+  }
+
+  return normalized;
 }
 
 export async function updateEntry(id: string, updates: { analysis: JournalAnalysis; entry_date: string }) {
-  const entries = await getEntries();
-  const existing = entries.find((entry) => entry.id === id);
+  const { supabase, user } = await getScopedClient();
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .update({
+      entry_date: updates.entry_date,
+      analysis: updates.analysis
+    })
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id, user_id, entry_date, created_at, analysis")
+    .maybeSingle();
 
-  if (!existing) {
+  if (error) {
+    throw new Error(`Unable to update journal entry: ${error.message}`);
+  }
+
+  if (!data) {
     return null;
   }
 
-  const updatedRecord: JournalRecord = {
-    ...existing,
-    entry_date: updates.entry_date,
-    analysis: updates.analysis
-  };
+  const normalized = normalizeRecord(data);
 
-  const nextEntries = entries.map((entry) => (entry.id === id ? updatedRecord : entry));
-  await writeDatabase(nextEntries);
-  return updatedRecord;
+  if (!normalized) {
+    throw new Error("Updated journal entry did not match the expected record shape.");
+  }
+
+  return normalized;
 }
 
 export async function deleteEntry(id: string) {
-  const entries = await getEntries();
-  const existing = entries.find((entry) => entry.id === id);
+  const { supabase, user } = await getScopedClient();
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
 
-  if (!existing) {
-    return false;
+  if (error) {
+    throw new Error(`Unable to delete journal entry: ${error.message}`);
   }
 
-  await writeDatabase(entries.filter((entry) => entry.id !== id));
-  return true;
+  return Boolean(data);
 }
 
 function subtractDays(date: Date, days: number) {
@@ -350,8 +394,23 @@ function buildArchiveItems(entries: JournalRecord[]): ArchiveListItem[] {
 }
 
 export async function getEntryById(id: string) {
-  const entries = await getEntries();
-  return entries.find((entry) => entry.id === id) ?? null;
+  const { supabase, user } = await getScopedClient();
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select("id, user_id, entry_date, created_at, analysis")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Unable to load journal entry: ${error.message}`);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return normalizeRecord(data);
 }
 
 export async function getArchiveEntries() {

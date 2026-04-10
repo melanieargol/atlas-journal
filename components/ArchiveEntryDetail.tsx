@@ -14,7 +14,7 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T00:00:00`));
 }
 
-export function ArchiveEntryDetail({ entry }: { entry: JournalRecord }) {
+export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: JournalRecord; readOnly?: boolean }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -33,6 +33,10 @@ export function ArchiveEntryDetail({ entry }: { entry: JournalRecord }) {
   }
 
   function handleSave(reanalyze: boolean) {
+    if (readOnly) {
+      return;
+    }
+
     setError(null);
     setStatus(null);
 
@@ -72,6 +76,10 @@ export function ArchiveEntryDetail({ entry }: { entry: JournalRecord }) {
   }
 
   function handleDelete() {
+    if (readOnly) {
+      return;
+    }
+
     startTransition(async () => {
       const response = await fetch(`/api/entries/${currentEntry.id}`, {
         method: "DELETE"
@@ -110,35 +118,49 @@ export function ArchiveEntryDetail({ entry }: { entry: JournalRecord }) {
           <p className="muted-text">Written at: {new Date(currentEntry.created_at).toLocaleString()}</p>
         </div>
 
-        <div className="entry-management-row">
-          <button className="secondary-button" type="button" onClick={() => {
-            setIsEditing((value) => !value);
-            setIsConfirmingDelete(false);
-            resetDraft();
-          }}>
-            {isEditing ? "Close editor" : "Edit entry"}
-          </button>
-          {!isConfirmingDelete ? (
-            <button className="danger-button" type="button" onClick={() => setIsConfirmingDelete(true)}>
+        {readOnly ? (
+          <div className="entry-management-row">
+            <button className="secondary-button button-disabled" type="button" disabled>
+              Edit entry
+            </button>
+            <button className="danger-button button-disabled" type="button" disabled>
               Delete entry
             </button>
-          ) : (
-            <div className="confirm-delete-row">
-              <span className="muted-text">Delete permanently?</span>
-              <button className="danger-button" type="button" onClick={handleDelete} disabled={isPending}>
-                Confirm delete
+            <p className="muted-text demo-action-note">
+              Demo mode is view-only. You can explore the entry, search the archive, and review insights here. Sign in to save, edit, or delete entries in a private account.
+            </p>
+          </div>
+        ) : (
+          <div className="entry-management-row">
+            <button className="secondary-button" type="button" onClick={() => {
+              setIsEditing((value) => !value);
+              setIsConfirmingDelete(false);
+              resetDraft();
+            }}>
+              {isEditing ? "Close editor" : "Edit entry"}
+            </button>
+            {!isConfirmingDelete ? (
+              <button className="danger-button" type="button" onClick={() => setIsConfirmingDelete(true)}>
+                Delete entry
               </button>
-              <button className="secondary-button" type="button" onClick={() => setIsConfirmingDelete(false)}>
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="confirm-delete-row">
+                <span className="muted-text">Delete permanently?</span>
+                <button className="danger-button" type="button" onClick={handleDelete} disabled={isPending}>
+                  Confirm delete
+                </button>
+                <button className="secondary-button" type="button" onClick={() => setIsConfirmingDelete(false)}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {status ? <div className="success-box">{status}</div> : null}
         {error ? <div className="error-box">{error}</div> : null}
       </section>
 
-      {isEditing ? (
+      {isEditing && !readOnly ? (
         <section className="panel entry-editor-panel">
           <div className="section-head">
             <div>

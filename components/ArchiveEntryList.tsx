@@ -20,7 +20,7 @@ function formatGroupLabel(date: string) {
   }).format(new Date(`${date}T00:00:00`));
 }
 
-export function ArchiveEntryList({ entries }: { entries: ArchiveListItem[] }) {
+export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: ArchiveListItem[]; basePath?: string }) {
   const [search, setSearch] = useState("");
   const [emotionFilter, setEmotionFilter] = useState("all");
   const [themeFilter, setThemeFilter] = useState("all");
@@ -114,7 +114,7 @@ export function ArchiveEntryList({ entries }: { entries: ArchiveListItem[] }) {
 
             <div className="archive-grid">
               {items.map((entry) => (
-                <Link key={entry.id} href={`/archive/${entry.id}`} className="panel archive-card">
+                <Link key={entry.id} href={`${basePath}/${entry.id}`} className="panel archive-card">
                   <div className="archive-topline">
                     <span className="section-label">{formatDate(entry.entry_date)}</span>
                     <span className="archive-energy">{entry.energy_direction}</span>
