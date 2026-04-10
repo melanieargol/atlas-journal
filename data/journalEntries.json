@@ -1,0 +1,416 @@
+{
+  "entries": [
+    {
+      "id": "entry_1775799704490",
+      "entry_date": "2026-04-10",
+      "created_at": "2026-04-10T05:41:44.490Z",
+      "analysis": {
+        "raw_text": "I was so excited to get $30,000 refund today!",
+        "summary": "The entry reflects a mixed emotional pattern with both strain and regulation present.",
+        "primary_emotion": "reflective",
+        "secondary_emotions": [],
+        "joy_sources": [],
+        "gratitude_moments": [],
+        "wins": [
+          "noticed discomfort and left the situation"
+        ],
+        "what_to_repeat": [
+          "leaving situations that feel off"
+        ],
+        "triggers": [
+          {
+            "type": "other",
+            "description": "The entry suggests a situational stressor, though it is not fully explicit."
+          }
+        ],
+        "coping_actions": [],
+        "sentiment": {
+          "label": "neutral",
+          "score": 0
+        },
+        "mood_score": 6,
+        "stress_level": 5,
+        "energy_level": 5,
+        "energy_direction": "neutral",
+        "emotional_shift": {
+          "start_state": "tense",
+          "end_state": "reflective",
+          "direction": "unchanged"
+        },
+        "themes": [
+          "emotional processing",
+          "unprocessed tension",
+          "reflection"
+        ],
+        "notable_phrases": [
+          "I was so excited to get $30,000 refund today"
+        ],
+        "reflection_tags": [
+          "reflective",
+          "other",
+          "active strain"
+        ],
+        "confidence": {
+          "primary_emotion": 0.68,
+          "triggers": 0.58,
+          "coping_actions": 0.54,
+          "overall": 0.78
+        }
+      }
+    },
+    {
+      "id": "entry_1775797915323",
+      "entry_date": "2026-04-10",
+      "created_at": "2026-04-10T05:11:55.323Z",
+      "analysis": {
+        "raw_text": "When I went to the shooting range, I saw someone who really creeped me out. I ended up leaving. I guess I will have to find a new range to shoot at.",
+        "summary": "The entry reflects a mixed emotional pattern with both strain and regulation present.",
+        "primary_emotion": "reflective",
+        "secondary_emotions": [],
+        "joy_sources": [],
+        "gratitude_moments": [],
+        "wins": [],
+        "what_to_repeat": [],
+        "triggers": [
+          {
+            "type": "other",
+            "description": "The entry suggests a situational stressor, though it is not fully explicit."
+          }
+        ],
+        "coping_actions": [],
+        "sentiment": {
+          "label": "neutral",
+          "score": 0
+        },
+        "mood_score": 6,
+        "stress_level": 5,
+        "energy_level": 5,
+        "energy_direction": "neutral",
+        "emotional_shift": {
+          "start_state": "tense",
+          "end_state": "reflective",
+          "direction": "unchanged"
+        },
+        "themes": [
+          "emotional processing",
+          "unprocessed tension",
+          "reflection"
+        ],
+        "notable_phrases": [
+          "When I went to the shooting range, I saw someone who really creeped me out",
+          "I ended up leaving",
+          "I guess I will have to find a new range to shoot at"
+        ],
+        "reflection_tags": [
+          "reflective",
+          "other",
+          "active strain"
+        ],
+        "confidence": {
+          "primary_emotion": 0.68,
+          "triggers": 0.58,
+          "coping_actions": 0.54,
+          "overall": 0.78
+        }
+      }
+    },
+    {
+      "id": "entry_1775797841808",
+      "entry_date": "2026-04-10",
+      "created_at": "2026-04-10T05:10:41.808Z",
+      "analysis": {
+        "raw_text": "Today I felt really overwhelmed after talking about money. I started the day hopeful, but by the afternoon I felt drained and anxious. Later I took the dog for a walk and felt a little calmer.",
+        "summary": "A conversation about money shifted the day from hope into anxiety before a calming walk helped restore some steadiness.",
+        "primary_emotion": "overwhelmed",
+        "secondary_emotions": [
+          "hopeful",
+          "anxious",
+          "calmer"
+        ],
+        "joy_sources": [
+          "time with the dog",
+          "being outside or walking"
+        ],
+        "gratitude_moments": [
+          "relief after a harder stretch"
+        ],
+        "wins": [
+          "made space for a regulating activity"
+        ],
+        "what_to_repeat": [
+          "walked the dog",
+          "being outside or walking"
+        ],
+        "triggers": [
+          {
+            "type": "finance",
+            "description": "A conversation about money created emotional strain."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "walked the dog",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "mixed",
+          "score": -0.25
+        },
+        "mood_score": 4,
+        "stress_level": 8,
+        "energy_level": 3,
+        "energy_direction": "mixed",
+        "emotional_shift": {
+          "start_state": "hopeful",
+          "end_state": "calmer",
+          "direction": "mixed"
+        },
+        "themes": [
+          "financial stress",
+          "emotional overwhelm",
+          "self-soothing"
+        ],
+        "notable_phrases": [
+          "felt really overwhelmed",
+          "drained and anxious",
+          "felt a little calmer"
+        ],
+        "reflection_tags": [
+          "money stress",
+          "recovery",
+          "daily pressure"
+        ],
+        "confidence": {
+          "primary_emotion": 0.95,
+          "triggers": 0.9,
+          "coping_actions": 0.94,
+          "overall": 0.91
+        }
+      }
+    },
+    {
+      "id": "seed_001",
+      "entry_date": "2026-04-09",
+      "created_at": "2026-04-09T08:30:00.000Z",
+      "analysis": {
+        "raw_text": "Today I felt really overwhelmed after talking about money. I started the day hopeful, but by the afternoon I felt drained and anxious. Later I took the dog for a walk and felt a little calmer.",
+        "summary": "A conversation about money shifted the day from hope into anxiety before a calming walk helped restore some steadiness.",
+        "primary_emotion": "overwhelmed",
+        "secondary_emotions": [
+          "hopeful",
+          "anxious",
+          "calmer"
+        ],
+        "joy_sources": [
+          "time with the dog",
+          "being outside or walking"
+        ],
+        "gratitude_moments": [
+          "relief after a harder stretch"
+        ],
+        "wins": [
+          "made space for a regulating activity"
+        ],
+        "what_to_repeat": [
+          "walked the dog",
+          "being outside or walking"
+        ],
+        "triggers": [
+          {
+            "type": "finance",
+            "description": "A conversation about money created emotional strain."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "walked the dog",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "mixed",
+          "score": -0.25
+        },
+        "mood_score": 4,
+        "stress_level": 8,
+        "energy_level": 3,
+        "energy_direction": "mixed",
+        "emotional_shift": {
+          "start_state": "hopeful",
+          "end_state": "calmer",
+          "direction": "mixed"
+        },
+        "themes": [
+          "financial stress",
+          "emotional overwhelm",
+          "self-soothing"
+        ],
+        "notable_phrases": [
+          "felt really overwhelmed",
+          "drained and anxious",
+          "felt a little calmer"
+        ],
+        "reflection_tags": [
+          "money stress",
+          "recovery",
+          "daily pressure"
+        ],
+        "confidence": {
+          "primary_emotion": 0.95,
+          "triggers": 0.9,
+          "coping_actions": 0.94,
+          "overall": 0.91
+        }
+      }
+    },
+    {
+      "id": "seed_002",
+      "entry_date": "2026-04-06",
+      "created_at": "2026-04-06T20:15:00.000Z",
+      "analysis": {
+        "raw_text": "I had a dense day at work and felt pressure building before my afternoon meeting. I was tense and self-critical, but taking ten minutes to breathe before logging off helped me feel steadier.",
+        "summary": "Work pressure and self-criticism built through the day, and a short breathing break helped bring some stability back.",
+        "primary_emotion": "tense",
+        "secondary_emotions": [
+          "self-critical",
+          "steadier"
+        ],
+        "joy_sources": [],
+        "gratitude_moments": [
+          "something in the day felt supportive"
+        ],
+        "wins": [
+          "paused to regulate before continuing"
+        ],
+        "what_to_repeat": [
+          "took ten minutes to breathe"
+        ],
+        "triggers": [
+          {
+            "type": "work",
+            "description": "Workload and a meeting deadline increased pressure."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "took ten minutes to breathe",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "mixed",
+          "score": -0.18
+        },
+        "mood_score": 5,
+        "stress_level": 7,
+        "energy_level": 4,
+        "energy_direction": "mixed",
+        "emotional_shift": {
+          "start_state": "pressured",
+          "end_state": "steadier",
+          "direction": "mixed"
+        },
+        "themes": [
+          "work stress",
+          "self-criticism",
+          "regulation"
+        ],
+        "notable_phrases": [
+          "felt pressure building",
+          "self-critical",
+          "feel steadier"
+        ],
+        "reflection_tags": [
+          "pressure",
+          "meeting anxiety",
+          "recovery attempt"
+        ],
+        "confidence": {
+          "primary_emotion": 0.84,
+          "triggers": 0.92,
+          "coping_actions": 0.93,
+          "overall": 0.88
+        }
+      }
+    },
+    {
+      "id": "seed_003",
+      "entry_date": "2026-04-03",
+      "created_at": "2026-04-03T07:45:00.000Z",
+      "analysis": {
+        "raw_text": "I woke up tired after a rough night of sleep, and everything felt heavier than it should have. A quiet breakfast and stretching by the window helped a little, but I still moved through the day slowly.",
+        "summary": "Poor sleep left the day feeling heavy, and a gentle morning routine provided only partial recovery.",
+        "primary_emotion": "drained",
+        "secondary_emotions": [
+          "tired",
+          "heavy",
+          "slow"
+        ],
+        "joy_sources": [
+          "light or a calmer environment"
+        ],
+        "gratitude_moments": [
+          "something in the day felt supportive"
+        ],
+        "wins": [
+          "followed through on a small caring routine"
+        ],
+        "what_to_repeat": [
+          "stretched by the window",
+          "light or a calmer environment"
+        ],
+        "triggers": [
+          {
+            "type": "health",
+            "description": "Low sleep quality seems to be driving the low-energy state."
+          }
+        ],
+        "coping_actions": [
+          {
+            "action": "ate a quiet breakfast",
+            "impact": "helpful"
+          },
+          {
+            "action": "stretched by the window",
+            "impact": "helpful"
+          }
+        ],
+        "sentiment": {
+          "label": "negative",
+          "score": -0.42
+        },
+        "mood_score": 4,
+        "stress_level": 6,
+        "energy_level": 2,
+        "energy_direction": "draining",
+        "emotional_shift": {
+          "start_state": "tired",
+          "end_state": "slow",
+          "direction": "unchanged"
+        },
+        "themes": [
+          "fatigue",
+          "gentle care",
+          "slow recovery"
+        ],
+        "notable_phrases": [
+          "woke up tired",
+          "felt heavier",
+          "helped a little"
+        ],
+        "reflection_tags": [
+          "sleep debt",
+          "low reserve",
+          "care ritual"
+        ],
+        "confidence": {
+          "primary_emotion": 0.89,
+          "triggers": 0.86,
+          "coping_actions": 0.88,
+          "overall": 0.87
+        }
+      }
+    }
+  ]
+}
