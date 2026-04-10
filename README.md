@@ -3,6 +3,20 @@
 ## Preview
 
 
+<p align="center">
+  <img src="public/screenshots/Homescreen.png" width="45%" />
+  <img src="public/screenshots/summary.png" width="45%" />
+</p>
+
+<p align="center">
+  <img src="public/screenshots/nudges.png" width="45%" />
+  <img src="public/screenshots/searchbar.png" width="45%" />
+</p>
+
+<p align="center">
+  <img src="public/screenshots/login.png" width="45%" />
+</p>
+
 **AI-powered emotional intelligence platform that transforms raw journaling into structured insight, behavioral patterns, and personalized reflection.**
 
 Atlas Journal goes beyond storing text — it builds a **data pipeline from human emotion → structured data → meaningful feedback.**
