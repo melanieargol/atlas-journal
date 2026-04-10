@@ -1,5 +1,14 @@
 # Atlas Journal
 
+Atlas Journal transforms raw journaling into structured emotional insight.
+
+Instead of static entries, it surfaces patterns over time — emotional movement, recurring triggers, and restorative signals — so reflection becomes something you can actually revisit and understand.
+
+This project includes:
+- A full journaling experience with authenticated user data
+- A recruiter-friendly interactive demo mode (no sign-in required)
+- A pattern dashboard that highlights emotional trends over time
+
 ## Preview
 
 <p align="center">
