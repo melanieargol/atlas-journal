@@ -219,3 +219,7 @@ npm run dev
 - All analysis is validated with Zod before saving.
 - The original journal entry is always preserved.
 - The interface is intentionally small, polished, and structured to keep the MVP easy to extend.
+
+## 🛠 Tech Stack
+
+Next.js · TypeScript · Supabase · Postgres · Tailwind CSS · Resend (email auth)
