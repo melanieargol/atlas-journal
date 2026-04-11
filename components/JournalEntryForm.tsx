@@ -18,7 +18,7 @@ type AnalyzeResponse =
     };
 
 const starterEntry =
-  "Today I felt really overwhelmed after talking about money. I started the day hopeful, but by the afternoon I felt drained and anxious. Later I took the dog for a walk and felt a little calmer.";
+  "";
 
 export function JournalEntryForm() {
   const [rawText, setRawText] = useState(starterEntry);

@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { analyzeEntry } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 import { saveEntry } from "@/lib/db";
-import { formatValidationError, validateAnalysis, validateAnalyzeEntryInput } from "@/lib/validators";
+import {
+  formatValidationError,
+  validateAnalysis,
+  validateAnalyzeEntryInput
+} from "@/lib/validators";
 
 export async function POST(request: Request) {
   try {
@@ -14,16 +18,75 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const input = validateAnalyzeEntryInput(body);
+
+    let input: ReturnType<typeof validateAnalyzeEntryInput>;
+    try {
+      input = validateAnalyzeEntryInput(body);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Journal entry input is invalid.",
+          details: formatValidationError(error)
+        },
+        { status: 400 }
+      );
+    }
+
     const entryDate = input.entry_date ?? new Date().toISOString().slice(0, 10);
 
-    const { analysis, mode } = await analyzeEntry(input.raw_text);
-    const validated = validateAnalysis({
-      ...analysis,
-      raw_text: input.raw_text
-    });
+    let analysis: Awaited<ReturnType<typeof analyzeEntry>>["analysis"];
+    let mode: Awaited<ReturnType<typeof analyzeEntry>>["mode"];
 
-    await saveEntry(validated, entryDate);
+    try {
+      const result = await analyzeEntry(input.raw_text);
+      analysis = result.analysis;
+      mode = result.mode;
+    } catch (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Atlas Journal could not generate analysis.",
+          details: error instanceof Error ? error.message : "Unknown analysis error."
+        },
+        { status: 500 }
+      );
+    }
+
+    let validated;
+    try {
+      validated = validateAnalysis({
+        ...analysis,
+        raw_text: input.raw_text
+      });
+    } catch (error) {
+      console.error("validateAnalysis failed:", error);
+      console.error("analysis payload:", analysis);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Analysis schema validation failed.",
+          details: formatValidationError(error)
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      await saveEntry(validated, entryDate);
+    } catch (error) {
+      console.error("saveEntry failed:", error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Analysis succeeded, but the entry could not be saved.",
+          details: error instanceof Error ? error.message : "Unknown save error."
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
@@ -34,10 +97,10 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Atlas Journal could not validate the analysis payload.",
-        details: formatValidationError(error)
+        error: "Unexpected server error.",
+        details: error instanceof Error ? error.message : "Unknown error."
       },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }
