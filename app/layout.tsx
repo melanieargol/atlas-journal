@@ -18,6 +18,10 @@ export const metadata: Metadata = {
   title: "Atlas Journal",
   description:
     "Atlas Journal is a grounded journaling MVP that turns raw entries into structured emotional insight.",
+    icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -35,9 +39,3 @@ export default function RootLayout({
   );
 }
 
-export const metadata = {
-  icons: {
-    icon: "/icon.png",
-    apple: "/apple-icon.png",
-  },
-};
