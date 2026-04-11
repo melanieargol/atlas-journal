@@ -20,7 +20,6 @@ export const metadata: Metadata = {
     "Atlas Journal is a grounded journaling MVP that turns raw entries into structured emotional insight.",
     icons: {
     icon: "/icon.png",
-    apple: "/apple-icon.png",
   },
 };
 
