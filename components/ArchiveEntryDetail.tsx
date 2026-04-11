@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ResultsCard } from "@/components/ResultsCard";
 import type { JournalRecord } from "@/types/journal";
 
+
 function formatDate(date: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "long",

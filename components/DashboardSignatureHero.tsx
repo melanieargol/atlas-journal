@@ -41,7 +41,7 @@ export function DashboardSignatureHero({ eyebrow, title, description, spotlight,
           {actions && actions.length > 0 ? (
             <div className="cta-row dashboard-hero-actions">
               {actions.map((action) => (
-                <Link key={action.href} href={action.href} className={action.kind === "primary" ? "primary-button" : "secondary-button"}>
+                <Link key={action.href} href={action.href as any} className={action.kind === "primary" ? "primary-button" : "secondary-button"}>
                   {action.label}
                 </Link>
               ))}

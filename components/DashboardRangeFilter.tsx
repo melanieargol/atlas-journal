@@ -23,7 +23,7 @@ export function DashboardRangeFilter({ activeRange, basePath = "/dashboard" }: {
         {options.map((option) => (
           <Link
             key={option.value}
-            href={`${basePath}?range=${option.value}`}
+            href={`${basePath}?range=${option.value}` as any}
             className={option.value === activeRange ? "filter-chip filter-chip-active" : "filter-chip"}
           >
             {option.label}

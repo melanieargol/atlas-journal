@@ -114,7 +114,7 @@ export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: 
 
             <div className="archive-grid">
               {items.map((entry) => (
-                <Link key={entry.id} href={`${basePath}/${entry.id}`} className="panel archive-card">
+                <Link key={entry.id} href={`${basePath}/${entry.id}` as any} className="panel archive-card">
                   <div className="archive-topline">
                     <span className="section-label">{formatDate(entry.entry_date)}</span>
                     <span className="archive-energy">{entry.energy_direction}</span>
