@@ -1,8 +1,6 @@
 # Atlas Journal
 
-A production-ready emotional intelligence journaling platform with real user auth, AI analysis, and pattern-driven insights.
-
-Atlas Journal transforms raw journaling into structured emotional insight.
+Atlas Journal is a production-ready emotional intelligence journaling platform that transforms raw journaling into structured emotional insight.
 
 Instead of static entries, it surfaces patterns over time — emotional movement, recurring triggers, and restorative signals — so reflection becomes something you can actually revisit and understand.
 
@@ -163,8 +161,8 @@ lib/
 ## 🔐 Authentication
 
 * Magic link email authentication (Supabase)
-* Emails sent via Resend
-* Environment-aware redirects (localhost / Vercel / production)
+* Emails are delivered through your Supabase auth email configuration
+* Redirects return through `/auth/callback` on the active app origin
 
 ---
 
@@ -189,9 +187,8 @@ You will need:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-RESEND_API_KEY=
-NEXT_PUBLIC_SITE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+OPENAI_API_KEY=
 ```
 
 ---

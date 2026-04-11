@@ -1,14 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 
 export function AuthSignInForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const callbackError =
+    searchParams.get("error") === "auth_callback_failed"
+      ? "That sign-in link could not be completed. Please request a fresh magic link and try again."
+      : null;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -17,12 +23,20 @@ export function AuthSignInForm() {
 
     startTransition(async () => {
       try {
+        const trimmedEmail = email.trim();
+
+        if (!trimmedEmail) {
+          setError("Enter an email address to receive your sign-in link.");
+          return;
+        }
+
         const supabase = createClient();
-        const redirectTo = `${window.location.origin}/auth/callback`;
+        const redirectTo = new URL("/auth/callback", window.location.origin);
+        redirectTo.searchParams.set("next", "/dashboard");
         const { error: authError } = await supabase.auth.signInWithOtp({
-          email,
+          email: trimmedEmail,
           options: {
-            emailRedirectTo: redirectTo
+            emailRedirectTo: redirectTo.toString()
           }
         });
 
@@ -72,6 +86,7 @@ export function AuthSignInForm() {
 
       {status ? <div className="success-box">{status}</div> : null}
       {error ? <div className="error-box">{error}</div> : null}
+      {!error && callbackError ? <div className="error-box">{callbackError}</div> : null}
     </section>
   );
 }
