@@ -234,9 +234,13 @@ select {
     padding: 12px 16px;
   }
 
-  .brand {
+  .brand,
+  .brand-link {
+    margin-left: 0;
     justify-content: center;
+    align-self: center;
   }
+
 
   .nav {
     width: 100%;
