@@ -1,5 +1,7 @@
 # Atlas Journal
 
+A production-ready emotional intelligence journaling platform with real user auth, AI analysis, and pattern-driven insights.
+
 Atlas Journal transforms raw journaling into structured emotional insight.
 
 Instead of static entries, it surfaces patterns over time — emotional movement, recurring triggers, and restorative signals — so reflection becomes something you can actually revisit and understand.
@@ -51,23 +53,27 @@ This project includes:
   <img src="screenshots/10-login.png" width="80%" />
 </p>
 
-**AI-powered emotional intelligence platform that transforms raw journaling into structured insight, behavioral patterns, and personalized reflection.**
 
-Atlas Journal goes beyond storing text — it builds a **data pipeline from human emotion → structured data → meaningful feedback.**
+
+## 🌐 Live App
+
+👉 [https://atlasjournal.dev](https://atlasjournal.dev)
 
 ---
 
 ## 🧠 What makes this different
 
 Most journaling apps:
-- store entries  
-- maybe show mood charts  
+
+* store entries
+* maybe show mood charts
 
 **Atlas Journal:**
-- extracts emotional signals from unstructured writing  
-- identifies patterns over time  
-- surfaces *behavioral insights*  
-- reinforces positive habits through personalized nudges  
+
+* extracts emotional signals from unstructured writing
+* identifies patterns over time
+* surfaces *behavioral insights*
+* reinforces positive habits through personalized nudges
 
 👉 It turns reflection into **actionable self-awareness**
 
@@ -75,15 +81,15 @@ Most journaling apps:
 
 ## ⚙️ Core capabilities
 
-- ✍️ Free-form journaling (raw input)
-- 🧠 AI-powered emotional analysis
-- 📊 Trend tracking (emotion, stress, energy)
-- 🔍 Search + archive system
-- 🧭 Pattern recognition (triggers, coping, themes)
-- 💡 Restorative insights (what helps vs. harms)
-- 🔁 Behavioral nudges based on user patterns
-- 🔐 Secure user authentication (Supabase)
-- ☁️ User-scoped cloud data storage
+* ✍️ Free-form journaling (raw input)
+* 🧠 AI-powered emotional analysis
+* 📊 Trend tracking (emotion, stress, energy)
+* 🔍 Search + archive system
+* 🧭 Pattern recognition (triggers, coping, themes)
+* 💡 Restorative insights (what helps vs. harms)
+* 🔁 Behavioral nudges based on user patterns
+* 🔐 Secure user authentication (Supabase magic link)
+* ☁️ User-scoped cloud data storage (Postgres via Supabase)
 
 ---
 
@@ -103,123 +109,102 @@ Aggregation + Trend Analysis
 Insights + Nudges + Dashboard
 ```
 
-## Source of truth files
+---
 
-- [`lib/schema.ts`](/C:/Users/spiri/OneDrive/Desktop/AtlasJournal/lib/schema.ts)
-  Zod validation for the MVP analysis shape.
-- [`data/sampleEntries.json`](/C:/Users/spiri/OneDrive/Desktop/AtlasJournal/data/sampleEntries.json)
-  Seed data used to initialize the local JSON database.
-- [`analyzeEntry.prompt.txt`](/C:/Users/spiri/OneDrive/Desktop/AtlasJournal/analyzeEntry.prompt.txt)
-  Extraction rules used for AI analysis.
+## 🧪 Demo Mode
 
-## MVP analysis fields
+Atlas Journal includes a **demo mode** that allows full exploration without authentication.
 
-The app currently validates and stores only these fields:
+* Uses pre-seeded sample entries
+* Mirrors real app behavior
+* Allows recruiters/users to explore instantly
 
-- `raw_text`
-- `summary`
-- `primary_emotion`
-- `secondary_emotions`
-- `triggers`
-- `coping_actions`
-- `sentiment`
-- `mood_score`
-- `stress_level`
-- `energy_level`
-- `energy_direction`
-- `emotional_shift`
-- `themes`
-- `notable_phrases`
-- `reflection_tags`
-- `confidence`
+---
 
-## File structure
+## 📁 Key files
+
+* `lib/schema.ts`
+  Zod validation for the structured analysis shape
+
+* `analyzeEntry.prompt.txt`
+  Extraction rules used for AI analysis
+
+* `data/demoEntries.json`
+  Sample data used for demo mode
+
+---
+
+## 🧱 File structure (simplified)
 
 ```text
 app/
-  api/analyze/route.ts      API route for analysis and persistence
-  archive/page.tsx          Archive list page
-  archive/[id]/page.tsx     Full saved-entry detail page
-  dashboard/page.tsx        Dashboard page with 3 charts
-  journal/page.tsx          Journal workspace
-  globals.css               Global design system and layout styles
-  layout.tsx                Shared metadata and root layout
-  page.tsx                  Landing page
+  api/analyze/route.ts
+  archive/
+  dashboard/
+  journal/
+  auth/
 
 components/
-  AppFrame.tsx              Shared top-level app frame
-  ArchiveEntryDetail.tsx    Full saved-entry detail presentation
-  ArchiveEntryList.tsx      Archive cards for all saved entries
-  DashboardRangeFilter.tsx  Range selector for dashboard filtering
-  RestorativeInsights.tsx   Supportive pattern-recognition summary cards
-  JournalEntryForm.tsx      Client-side journal form and API call
-  ResultsCard.tsx           Structured analysis display
-  EmotionTrendsChart.tsx    Mood and stress chart
-  TriggerSourcesChart.tsx   Trigger frequency chart
-  EnergyPatternsChart.tsx   Energy-over-time chart
-
-data/
-  sampleEntries.json        Seed entries
-  journalEntries.json       Local JSON persistence file
+  AppFrame.tsx
+  ArchiveEntryList.tsx
+  DashboardRangeFilter.tsx
+  JournalEntryForm.tsx
+  ResultsCard.tsx
 
 lib/
-  ai.ts                     Mock/OpenAI analysis logic
-  db.ts                     Explicit local JSON persistence helpers
-  schema.ts                 Zod schemas
-  validators.ts             Validation utilities
+  ai.ts
+  supabase/
+  schema.ts
 
-types/
-  journal.ts                Shared TypeScript types inferred from Zod
 ```
 
-## How persistence works
+---
 
-This MVP uses a simple local JSON file instead of a database service.
+## 🔐 Authentication
 
-- `data/sampleEntries.json` holds the seed dataset.
-- `data/journalEntries.json` is the working store.
-- On first run, if `journalEntries.json` is missing, Atlas Journal creates it from the sample seed file.
-- Every valid analysis result is appended to `journalEntries.json`.
+* Magic link email authentication (Supabase)
+* Emails sent via Resend
+* Environment-aware redirects (localhost / Vercel / production)
 
-## Install and run
+---
 
-1. Install Node.js 20 or newer.
-2. Install dependencies:
+## 🚀 Local development
 
 ```bash
 npm install
-```
-
-3. Start the dev server:
-
-```bash
 npm run dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000)
+Then open:
 
-## OpenAI behavior
+```text
+http://localhost:3000
+```
 
-- If `OPENAI_API_KEY` is not set, the app uses a mock analysis automatically.
-- If `OPENAI_API_KEY` is set, the analysis layer attempts an OpenAI request and falls back to the mock analysis if the request fails.
+---
 
-## Recent additions
+## ⚠️ Environment variables
 
-- Archive:
-  Saved entries can now be browsed from `/archive`, with each item showing the entry date, summary, primary emotion, themes, and energy direction.
-- Entry detail:
-  Each archived entry has its own detail page that shows the raw text and full structured analysis together.
-- Time range filters:
-  The dashboard supports `last 7 days`, `last 30 days`, `last 90 days`, and `all time`.
-- Restorative insights:
-  The dashboard now surfaces patterns in helpful coping actions, themes, and emotional shifts that tend to appear when outcomes improve.
+You will need:
 
-## Notes
+```text
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+RESEND_API_KEY=
+NEXT_PUBLIC_SITE_URL=
+```
 
-- All analysis is validated with Zod before saving.
-- The original journal entry is always preserved.
-- The interface is intentionally small, polished, and structured to keep the MVP easy to extend.
+---
 
 ## 🛠 Tech Stack
 
-Next.js · TypeScript · Supabase · Postgres · Tailwind CSS · Resend (email auth)
+Next.js · TypeScript · Supabase · Postgres · Tailwind CSS · Resend
+
+---
+
+## ✨ Notes
+
+* All analysis is validated with Zod before saving
+* Each user’s data is isolated and secure
+* Demo mode is fully separate from real user data
+* Designed as a production-ready MVP with clear extension paths
