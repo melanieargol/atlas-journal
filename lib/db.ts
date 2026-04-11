@@ -221,7 +221,8 @@ export async function saveEntry(analysis: JournalAnalysis, entryDate: string) {
       user_id: user.id,
       entry_date: entryDate,
       created_at: createdAt,
-      analysis
+      analysis,
+      raw_text: analysis.raw_text
     })
     .select("id, user_id, entry_date, created_at, analysis")
     .single();
