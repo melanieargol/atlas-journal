@@ -19,7 +19,16 @@ export function ResultsCard({ analysis }: ResultsCardProps) {
   const displayMood = analysis.user_mood ?? analysis.mood_score;
   const displayStress = analysis.user_stress ?? analysis.stress_level;
   const displayEnergy = analysis.user_energy ?? analysis.energy_level;
-
+  const mergedTags = Array.from(
+    new Map(
+      [...(analysis.themes ?? []), ...(analysis.reflection_tags ?? [])]
+        .filter(Boolean)
+        .map((item) => {
+          const clean = item.trim();
+          return [clean.toLowerCase(), clean];
+        })
+    ).values()
+  );
   return (
     <section className="panel results-panel reveal-group">
       <SafetySupportCard assessment={analysis.safety_assessment} />
@@ -205,7 +214,7 @@ export function ResultsCard({ analysis }: ResultsCardProps) {
         <article className="detail-panel reveal-panel">
           <p className="section-label">Themes and tags</p>
           <div className="tag-row">
-            {[...analysis.themes, ...analysis.reflection_tags].map((item) => (
+            {mergedTags.map((item) => (
               <span key={item} className="tag">
                 {item}
               </span>

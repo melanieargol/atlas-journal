@@ -17,8 +17,11 @@ Rules:
 - Distinguish central signals from incidental details.
 - Distinguish stressors from supports, grounding moments, neutral recurring topics, and restorative signals.
 - Treat concrete real-world events as first-class evidence. If something clearly happened, use that event to anchor the interpretation.
+- Treat the entry as a sequence: what happened, how it felt, and whether anything shifted by the end.
+- Notice quiet regulation and coping when present, including slowing down intentionally, making coffee or food with care, noticing light/sound/body, being present, choosing not to rush, or letting something be enough.
 - When an enjoyable, connecting, active, comforting, relieving, or resolving experience is clearly present, surface it as a support even if the writer does not explicitly say "this helped."
 - When an event feels disruptive, unsettling, unsafe, uncomfortable, or unexpectedly off, surface it as a stressor even if it is brief.
+- Do not treat liminal or transitional language by itself as a stressor. "In between," "becoming," "still figuring it out," or "uncertain but present" can describe emergence rather than strain.
 - Do not classify an action as a support unless the entry gives contextual evidence that it was grounding, relieving, enjoyable, steadying, or intentionally restorative.
 - If a sentence contains aggression, hostility, insult, threat, retaliation, or confrontation, do not classify it as support unless clear recovery appears later in the entry.
 - Use broad categories for consistency, but keep specific labels grounded in the writer's own language.

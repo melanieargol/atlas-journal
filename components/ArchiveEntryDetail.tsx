@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { CheckInFields, type CheckInValues } from "@/components/CheckInFields";
 import { ResultsCard } from "@/components/ResultsCard";
 import type { JournalRecord } from "@/types/journal";
 
@@ -22,6 +23,11 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [rawText, setRawText] = useState(entry.analysis.raw_text);
   const [entryDate, setEntryDate] = useState(entry.entry_date);
+  const [checkIns, setCheckIns] = useState<CheckInValues>({
+    mood: entry.analysis.user_mood,
+    stress: entry.analysis.user_stress,
+    energy: entry.analysis.user_energy
+  });
   const [currentEntry, setCurrentEntry] = useState(entry);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -30,8 +36,20 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
   function resetDraft() {
     setRawText(currentEntry.analysis.raw_text);
     setEntryDate(currentEntry.entry_date);
+    setCheckIns({
+      mood: currentEntry.analysis.user_mood,
+      stress: currentEntry.analysis.user_stress,
+      energy: currentEntry.analysis.user_energy
+    });
     setError(null);
     setStatus(null);
+  }
+
+  function handleCheckInChange(key: keyof CheckInValues, value: number | null) {
+    setCheckIns((current) => ({
+      ...current,
+      [key]: value
+    }));
   }
 
   function handleSave(reanalyze: boolean) {
@@ -51,6 +69,9 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
         body: JSON.stringify({
           raw_text: rawText,
           entry_date: entryDate,
+          user_mood: checkIns.mood,
+          user_stress: checkIns.stress,
+          user_energy: checkIns.energy,
           reanalyze
         })
       });
@@ -67,6 +88,11 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
       setCurrentEntry(payload.entry);
       setRawText(payload.entry.analysis.raw_text);
       setEntryDate(payload.entry.entry_date);
+      setCheckIns({
+        mood: payload.entry.analysis.user_mood,
+        stress: payload.entry.analysis.user_stress,
+        energy: payload.entry.analysis.user_energy
+      });
       setIsEditing(false);
       setStatus(
         reanalyze
@@ -190,6 +216,12 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
             className="entry-input"
             value={rawText}
             onChange={(event) => setRawText(event.target.value)}
+          />
+
+          <CheckInFields
+            values={checkIns}
+            onChange={handleCheckInChange}
+            helperText="These are optional. If you set them, Atlas Journal uses your check-ins in charts before falling back to AI estimates."
           />
 
           <div className="entry-management-row">

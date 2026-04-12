@@ -30,6 +30,31 @@ const emotionLexicon = [
   { label: "reflective", words: ["reflective", "processing", "thinking through"], tone: 1 }
 ] as const;
 
+const explicitEmotionLexicon = [
+  { label: "overwhelmed", regex: /\boverwhelmed|flooded|too much\b/i, tone: "negative", score: 2.2 },
+  { label: "anxious", regex: /\banxious|nervous|panicky|on edge|wired\b/i, tone: "negative", score: 2 },
+  { label: "tense", regex: /\btense|pressure|tight|stressed\b/i, tone: "negative", score: 1.8 },
+  { label: "angry", regex: /\bangry|furious|rage|resentful|hostile\b/i, tone: "negative", score: 2.2 },
+  { label: "frustrated", regex: /\bfrustrated|annoyed|irritated\b/i, tone: "negative", score: 1.8 },
+  { label: "sad", regex: /\bsad|low|heavy\b/i, tone: "negative", score: 1.8 },
+  { label: "grieving", regex: /\bgrief|grieving|mourning|loss\b/i, tone: "negative", score: 2.4 },
+  { label: "ashamed", regex: /\bashamed|embarrassed|humiliated\b/i, tone: "negative", score: 2 },
+  { label: "numb", regex: /\bnumb|flat|blank|shut down\b/i, tone: "negative", score: 1.9 },
+  { label: "drained", regex: /\bdrained|exhausted|spent|wiped\b/i, tone: "negative", score: 1.9 },
+  { label: "scattered", regex: /\bscattered|all over the place|can't focus|couldn't focus\b/i, tone: "negative", score: 1.7 },
+  { label: "unsettled", regex: /\bunsettled|off|uneasy\b/i, tone: "liminal", score: 1.8 },
+  { label: "tender", regex: /\btender|raw\b/i, tone: "liminal", score: 1.6 },
+  { label: "present", regex: /\bpresent\b/i, tone: "grounded", score: 1.7 },
+  { label: "steady", regex: /\bsteady|steadier|stable\b/i, tone: "grounded", score: 1.9 },
+  { label: "grounded", regex: /\bgrounded|settled\b/i, tone: "grounded", score: 2 },
+  { label: "accepting", regex: /\baccepting|enough\b/i, tone: "grounded", score: 1.7 },
+  { label: "calm", regex: /\bcalm|calmer\b/i, tone: "positive", score: 1.8 },
+  { label: "relieved", regex: /\brelieved|lighter|eased\b/i, tone: "positive", score: 1.9 },
+  { label: "hopeful", regex: /\bhopeful|optimistic|encouraged\b/i, tone: "positive", score: 1.8 },
+  { label: "grateful", regex: /\bgrateful|thankful|appreciative\b/i, tone: "positive", score: 1.8 },
+  { label: "satisfied", regex: /\bsatisfied|proud|accomplished\b/i, tone: "positive", score: 1.8 }
+] as const;
+
 const nonliteralMarkers = [
   "lol",
   "lmao",
@@ -141,6 +166,20 @@ const accomplishmentMarkers = [
   "solved"
 ] as const;
 
+const liminalMarkers = [
+  "in between",
+  "in-between",
+  "between versions",
+  "transition",
+  "transitional",
+  "becoming",
+  "not there yet",
+  "emerging",
+  "threshold",
+  "maybe that's enough",
+  "didn't solve anything but felt more present"
+] as const;
+
 const disruptionMarkers = [
   "weird",
   "off",
@@ -179,6 +218,26 @@ type SentenceSignal = {
   conflict: boolean;
   restorativeCue: boolean;
   centralCue: boolean;
+  index: number;
+};
+
+type EventSignal = {
+  label: string;
+  category: string;
+  evidence: string;
+  kind: "support" | "stressor" | "neutral";
+  weight: number;
+  positive: number;
+  negative: number;
+  index: number;
+};
+
+type StateSignal = {
+  label: string;
+  tone: "positive" | "negative" | "grounded" | "liminal" | "neutral";
+  evidence: string;
+  weight: number;
+  index: number;
 };
 
 function includesAny(text: string, words: string[]) {
@@ -221,6 +280,7 @@ function getSentenceSignals(rawText: string): SentenceSignal[] {
     return {
       sentence,
       normalized,
+      index,
       positionWeight: hasCentralCue ? positionWeight * 1.1 : positionWeight,
       nonliteral,
       emotionalWeight: nonliteral ? 0.45 : 1,
@@ -234,6 +294,137 @@ function getSentenceSignals(rawText: string): SentenceSignal[] {
 function findMatchedText(sentence: string, regex: RegExp) {
   const match = sentence.match(regex);
   return match?.[0]?.trim() ?? "";
+}
+
+function findMatch(sentence: string, regex: RegExp) {
+  return findMatchedText(sentence, regex);
+}
+
+function hasAny(sentence: SentenceSignal, markers: readonly string[]) {
+  return markers.some((marker) => sentence.normalized.includes(marker));
+}
+
+function isConflict(sentence: SentenceSignal) {
+  return sentence.conflict || /(argued|argument|fight|fighting|hostile|insulted|retaliat|threat|yelled|screamed)/i.test(sentence.sentence);
+}
+
+function hasGentleRegulation(sentence: SentenceSignal) {
+  if (hasNegativeContext(sentence)) {
+    return false;
+  }
+
+  return (
+    /(didn't rush|did not rush|took my time|slowed down|slowly|quietly|sat with|sat quietly|noticed|listened to|watched the light|watched the sunlight|watched the trees|felt more present|more present|breathed|breathing|steady myself|be here|maybe that's enough)/i.test(
+      sentence.sentence
+    ) ||
+    (/(coffee|tea|window|light|sunlight|sound|birds|wind|body|breath)/i.test(sentence.sentence) && !hasDisruptionSignal(sentence))
+  );
+}
+
+function hasNegatedConcept(sentence: SentenceSignal, regex: RegExp) {
+  const match = sentence.sentence.match(regex);
+  if (!match || typeof match.index !== "number") {
+    return false;
+  }
+
+  const before = sentence.sentence.slice(Math.max(0, match.index - 20), match.index).toLowerCase();
+  return /\b(no|not|never|without|isn't|isnt|wasn't|wasnt|didn't|didnt|doesn't|doesnt|nothing)\s+$/.test(before);
+}
+
+function hasQualifiedConcept(sentence: SentenceSignal, regex: RegExp) {
+  const match = sentence.sentence.match(regex);
+  if (!match || typeof match.index !== "number") {
+    return false;
+  }
+
+  const before = sentence.sentence.slice(Math.max(0, match.index - 28), match.index).toLowerCase();
+  return /\b(not exactly|not really|less like|more like|didn't feel like|did not feel like)\s+$/.test(before);
+}
+
+function isNegatedOrQualified(sentence: SentenceSignal, regex: RegExp) {
+  return hasNegatedConcept(sentence, regex) || hasQualifiedConcept(sentence, regex);
+}
+
+function indicatesActualStrain(sentence: SentenceSignal) {
+  return (
+    /(overwhelmed|anxious|scared|afraid|unsafe|pressure|burden|heavy|drained|exhausted|too much|overload|panicky|rage|furious|shame|worthless|hopeless|tense)/i.test(
+      sentence.sentence
+    ) ||
+    (hasDisruptionSignal(sentence) && !isNegatedOrQualified(sentence, /\b(unsafe|wrong|alarm|scared|awkward|uncomfortable|off)\b/i))
+  );
+}
+
+function isMeaningfulDiscomfort(sentence: SentenceSignal) {
+  return (
+    /(uncomfortable|hard|difficult|tender|raw|still|quiet|dangerous|unfamiliar|truth|honest|clarity|clearer)/i.test(sentence.sentence) &&
+    !indicatesActualStrain(sentence) &&
+    !isConflict(sentence)
+  );
+}
+
+function normalizeConceptLabel(label: string) {
+  const normalized = label.trim().toLowerCase();
+
+  if (/(didn't rush|did not rush|took my time|slowed down|slowly|quietly|let it be)/i.test(label)) return "intentional slowing";
+  if (/(more present|present|noticed the environment|noticed|light|sunlight|sound|birds|wind|window|breath|body)/i.test(label)) return "presence";
+  if (/(made coffee slowly|coffee|tea)/i.test(label)) return "small ritual";
+  if (/(accepting|maybe that's enough|let it be|enough)/i.test(label)) return "acceptance";
+  if (/(transition|in between|in-between|between versions|becoming|emerging)/i.test(label)) return "transition";
+  if (/(uncertain but grounded|uncertain but steadier|mixed recovery)/i.test(label)) return "emerging steadiness";
+  if (/(walk with the dog|movement|run|walk|stretch|gym|hike)/i.test(label)) return "movement";
+  if (/(social connection|talked to|talked with|called|texted|spent time with|coffee with|dinner with)/i.test(label)) return "social connection";
+  if (/(refund call|money conversation|budget|bills|rent)/i.test(label)) return "money stress";
+  if (/(manager|meeting|deadline|work)/i.test(label)) return "work pressure";
+  if (/(pain|migraine|sleep|rough night of sleep)/i.test(label)) return "physical strain";
+
+  return normalized;
+}
+
+function shouldPromoteTopic(label: string) {
+  const normalized = normalizeConceptLabel(label);
+  return ![
+    "slowly",
+    "quietly",
+    "off",
+    "awkward",
+    "alarm",
+    "wrong",
+    "uncomfortable",
+    "pressure",
+    "movement",
+    "coffee",
+    "tea"
+  ].includes(normalized);
+}
+
+function isEvidenceLabelMatch(label: string, evidence: string) {
+  const normalizedLabel = normalizeConceptLabel(label);
+  const normalizedEvidence = evidence.toLowerCase();
+
+  if (normalizedLabel === "presence") {
+    return /(present|noticed|light|sunlight|sound|birds|wind|window|breath|body|sat with|slowed down|didn't rush|did not rush)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "acceptance") {
+    return /(enough|let it be|accept|allow)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "transition") {
+    return /(in between|in-between|between versions|transition|transitional|becoming|emerging)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "emerging steadiness") {
+    return /(more present|steadier|grounded|clearer|less defended)/i.test(evidence);
+  }
+
+  return normalizedEvidence.includes(normalizedLabel.replace(/\s+/g, " "));
+}
+
+function dedupeByLabelAndEvidence<T extends { label: string; evidence: string }>(items: T[]) {
+  return unique(items.map((item) => JSON.stringify({ label: item.label, evidence: item.evidence }))).map((item) => {
+    const parsed = JSON.parse(item) as { label: string; evidence: string };
+    return items.find((candidate) => candidate.label === parsed.label && candidate.evidence === parsed.evidence)!;
+  });
 }
 
 function hasRestorativeOutcome(sentence: SentenceSignal) {
@@ -793,6 +984,525 @@ function deriveThemes(
   ]).slice(0, 8);
 }
 
+function extractEvents(entry: string) {
+  const sentences = getSentenceSignals(entry);
+  const events: EventSignal[] = [];
+
+  for (const sentence of sentences) {
+    const gentleRegulation = hasGentleRegulation(sentence);
+    const explicitRelief = hasRestorativeOutcome(sentence);
+    const positiveExperience = hasPositiveExperience(sentence);
+    const negativeContext = hasNegativeContext(sentence);
+    const liminalWithoutDistress =
+      liminalMarkers.some((marker) => sentence.normalized.includes(marker)) &&
+      !negativeContext &&
+      !hasDisruptionSignal(sentence) &&
+      !/(panic|terrified|unsafe|argument|fight|threat|rage|furious)/i.test(sentence.sentence);
+
+    if (/(made|brewed).*(coffee|tea)|(coffee|tea).*(slowly|quietly|didn't rush|did not rush|took my time)/i.test(sentence.sentence) && !negativeContext) {
+      events.push({
+        label: "made coffee slowly",
+        category: "routine",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.8,
+        positive: 2.3,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/(noticed|watched|listened to|heard|felt).*(light|sunlight|sound|birds|wind|body|breath|window)/i.test(sentence.sentence)) {
+      events.push({
+        label: "noticed the environment",
+        category: "presence",
+        evidence: sentence.sentence,
+        kind: gentleRegulation ? "support" : "neutral",
+        weight: scoreSentenceStrength(sentence) + 0.5,
+        positive: gentleRegulation ? 1.8 : 0.3,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/(didn't rush|did not rush|took my time|slowed down|slowly|quietly|maybe that's enough|more present|sat with it|let it be)/i.test(sentence.sentence) && !negativeContext) {
+      events.push({
+        label: findMatch(sentence.sentence, /didn't rush|did not rush|took my time|slowed down|slowly|quietly|maybe that's enough|more present|sat with it|let it be/i) || "intentional slowing",
+        category: "presence",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.8,
+        positive: 2,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/(coffee with|dinner with|lunch with|hung out with|spent time with|went out with|talked with|talked to|called|texted)/i.test(sentence.sentence) && /(friend|partner|mom|dad|sister|brother|family|coworker)/i.test(sentence.sentence)) {
+      events.push({
+        label: findMatch(sentence.sentence, /coffee with|dinner with|lunch with|hung out with|spent time with|went out with|talked with|talked to|called|texted/i) || "social connection",
+        category: "connection",
+        evidence: sentence.sentence,
+        kind: positiveExperience || explicitRelief ? "support" : "neutral",
+        weight: scoreSentenceStrength(sentence) + 0.7,
+        positive: positiveExperience || explicitRelief ? 2.1 : 0.8,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/(walked|went for a walk|took a walk|ran|run|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam)/i.test(sentence.sentence) && !likelyIncidentalMovementMarkers.some((marker) => sentence.normalized.includes(marker))) {
+      events.push({
+        label: findMatch(sentence.sentence, /walked the dog|went for a walk|took a walk|run|ran|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam/i) || "movement",
+        category: "movement",
+        evidence: sentence.sentence,
+        kind: explicitRelief || positiveExperience || gentleRegulation ? "support" : "neutral",
+        weight: scoreSentenceStrength(sentence) + 0.5,
+        positive: explicitRelief || positiveExperience || gentleRegulation ? 1.8 : 0.6,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (hasAny(sentence, accomplishmentMarkers) && !negativeContext) {
+      events.push({
+        label: findMatch(sentence.sentence, /finished|completed|got it done|wrapped up|followed through|made progress|crossed off|cleaned|submitted|figured it out|solved/i) || "accomplishment",
+        category: "accomplishment",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.6,
+        positive: 1.9,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/(finally|ended up|turned out|worked out|resolved|sorted out|got fixed)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+      events.push({
+        label: findMatch(sentence.sentence, /finally|ended up|turned out|worked out|resolved|sorted out|got fixed/i) || "resolution",
+        category: "resolution",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.7,
+        positive: 2,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    const explicitStressorMatch =
+      /(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload)/i.test(sentence.sentence) &&
+      !isNegatedOrQualified(sentence, /\b(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload)\b/i);
+
+    if (!liminalWithoutDistress && (isConflict(sentence) || explicitStressorMatch || (hasDisruptionSignal(sentence) && indicatesActualStrain(sentence)))) {
+      const category = isConflict(sentence)
+        ? "conflict"
+        : /(refund|money|budget|bills?|rent)/i.test(sentence.sentence)
+          ? "finance"
+          : /(deadline|manager|meeting|work)/i.test(sentence.sentence)
+            ? "work"
+            : /(migraine|pain|sleep|sick)/i.test(sentence.sentence)
+              ? "health"
+              : /(pressure|overloaded|overload)/i.test(sentence.sentence)
+                ? "pressure"
+                : "disruption";
+      const label =
+        findMatch(
+          sentence.sentence,
+          /argument|argued|fight|fighting|yelled|screamed|threatened|hostile|insulted|refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|caught me off guard|felt unsafe|something was wrong|got weird|went wrong|flat tire|car trouble|missed the train|alarm|uncomfortable|unsafe|scared|awkward/i
+        ) || category;
+
+      if (!isNegatedOrQualified(sentence, new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"))) {
+        events.push({
+          label,
+          category,
+          evidence: sentence.sentence,
+          kind: "stressor",
+          weight: scoreSentenceStrength(sentence) + (isConflict(sentence) ? 1 : 0.7),
+          positive: 0,
+          negative: isConflict(sentence) ? 2.4 : 1.9,
+          index: sentence.index
+        });
+      }
+    }
+  }
+
+  return { sentences, events };
+}
+
+function extractStateSignals(entry: string) {
+  const sentences = getSentenceSignals(entry);
+  const signals: StateSignal[] = [];
+
+  for (const sentence of sentences) {
+    for (const descriptor of explicitEmotionLexicon) {
+      if (descriptor.regex.test(sentence.sentence)) {
+        signals.push({
+          label: descriptor.label,
+          tone: descriptor.tone,
+          evidence: sentence.sentence,
+          weight: descriptor.score * scoreSentenceStrength(sentence),
+          index: sentence.index
+        });
+      }
+    }
+
+    if (liminalMarkers.some((marker) => sentence.normalized.includes(marker))) {
+      signals.push({
+        label: sentence.normalized.includes("maybe that's enough") ? "accepting" : "transitional",
+        tone: sentence.normalized.includes("maybe that's enough") ? "grounded" : "liminal",
+        evidence: sentence.sentence,
+        weight: 2.2 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (hasGentleRegulation(sentence) && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: "present",
+        tone: "grounded",
+        evidence: sentence.sentence,
+        weight: 1.4 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (/(didn't solve anything but felt more present|did not solve anything but felt more present|still unsure but steadier|uncertain but grounded|uncertain but steadier)/i.test(sentence.sentence)) {
+      signals.push({
+        label: "mixed recovery",
+        tone: "grounded",
+        evidence: sentence.sentence,
+        weight: 2 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+  }
+
+  return { sentences, signals };
+}
+
+function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof extractEvents>, stateResult: ReturnType<typeof extractStateSignals>) {
+  const supportCandidates: JournalAnalysis["supports"] = eventsResult.events
+    .filter((event) => event.kind === "support")
+    .filter((event) => !eventsResult.events.some((other) => other.kind === "stressor" && other.evidence === event.evidence && other.weight >= event.weight))
+    .filter((event) => !isConflict({ ...eventsResult.sentences[event.index], sentence: event.evidence, normalized: event.evidence.toLowerCase() }))
+    .sort((a, b) => b.weight - a.weight)
+    .map((event) => ({
+      label: event.label,
+      category: event.category,
+      evidence: event.evidence,
+      impact:
+        event.category === "presence" || event.label === "made coffee slowly" || /present|steady|enough|calm|clearer|let it be/i.test(event.evidence)
+          ? "grounding"
+          : event.category === "connection"
+            ? "validating"
+            : event.category === "movement" && /energized|alive/i.test(event.evidence)
+              ? "energizing"
+              : "helpful"
+    }));
+
+  const supports = dedupeByLabelAndEvidence(supportCandidates)
+    .filter((event) => isEvidenceLabelMatch(event.label, event.evidence))
+    .slice(0, 4);
+
+  const copingActions: JournalAnalysis["coping_actions"] = supports.map((support) => ({
+    action: support.label,
+    impact: support.impact === "mixed" ? "neutral" : "helpful"
+  }));
+
+  const restorativeSignals = unique([
+    ...supports.filter((item) => item.impact === "grounding" || item.impact === "helpful" || item.impact === "validating").map((item) => normalizeConceptLabel(item.label)),
+    ...stateResult.signals
+      .filter((item) => item.label === "present" || item.label === "accepting" || item.label === "steady" || item.label === "mixed recovery")
+      .map((item) => normalizeConceptLabel(item.label))
+  ]).slice(0, 4);
+
+  return { supports, copingActions, restorativeSignals };
+}
+
+function detectStressors(_entry: string, eventsResult: ReturnType<typeof extractEvents>, stateResult: ReturnType<typeof extractStateSignals>) {
+  const stressorCandidates = eventsResult.events
+    .filter((event) => event.kind === "stressor")
+    .filter((event) => indicatesActualStrain(eventsResult.sentences[event.index]))
+    .filter((event) => !eventsResult.events.some((other) => other.kind === "support" && other.evidence === event.evidence && other.weight >= event.weight))
+    .sort((a, b) => b.weight - a.weight)
+    .map((event) => ({
+      label: event.label,
+      category: event.category,
+      evidence: event.evidence,
+      intensity: clamp(
+        Math.round(4 + event.negative + (stateResult.signals.some((signal) => signal.index === event.index && signal.tone === "negative") ? 1.5 : 0)),
+        1,
+        10
+      )
+    }));
+
+  const stressors = dedupeByLabelAndEvidence(stressorCandidates)
+    .filter((item) => isEvidenceLabelMatch(item.label, item.evidence) || indicatesActualStrain(eventsResult.sentences.find((sentence) => sentence.sentence === item.evidence) ?? eventsResult.sentences[0]))
+    .slice(0, 3);
+
+  const triggers: JournalAnalysis["triggers"] = stressors.map((item) => ({
+    type:
+      item.category === "finance" || item.category === "work" || item.category === "family" || item.category === "health" || item.category === "conflict"
+        ? item.category
+        : "other",
+    description: item.evidence
+  }));
+
+  return { stressors: stressors.slice(0, 4), triggers };
+}
+
+function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof extractStateSignals>, supports: JournalAnalysis["supports"], stressors: JournalAnalysis["stressors"]) {
+  const { sentences, signals } = stateResult;
+  const third = Math.max(1, Math.ceil(sentences.length / 3));
+  const slices = [sentences.slice(0, third), sentences.slice(third, third * 2), sentences.slice(third * 2)].map((slice) => (slice.length > 0 ? slice : sentences));
+  const eventSignals: EventSignal[] = [
+    ...supports.map((item) => ({
+      label: item.label,
+      category: item.category,
+      evidence: item.evidence,
+      kind: "support" as const,
+      weight: 1.5,
+      positive: 1.5,
+      negative: 0,
+      index: sentences.find((sentence) => sentence.sentence === item.evidence)?.index ?? 0
+    })),
+    ...stressors.map((item) => ({
+      label: item.label,
+      category: item.category,
+      evidence: item.evidence,
+      kind: "stressor" as const,
+      weight: 1.5,
+      positive: 0,
+      negative: 1.5,
+      index: sentences.find((sentence) => sentence.sentence === item.evidence)?.index ?? 0
+    }))
+  ];
+
+  function segmentLabel(segment: SentenceSignal[]) {
+    const segmentSignals = signals.filter((signal) => segment.some((sentence) => sentence.index === signal.index));
+    const segmentEvents = eventSignals.filter((event) => segment.some((sentence) => sentence.index === event.index));
+    const liminal = segmentSignals.filter((signal) => signal.tone === "liminal").reduce((sum, signal) => sum + signal.weight, 0);
+    const grounded = segmentSignals.filter((signal) => signal.tone === "grounded").reduce((sum, signal) => sum + signal.weight, 0);
+    const negative = segmentSignals.filter((signal) => signal.tone === "negative").reduce((sum, signal) => sum + signal.weight, 0) + segmentEvents.reduce((sum, event) => sum + event.negative, 0);
+    const positive = segmentSignals.filter((signal) => signal.tone === "positive").reduce((sum, signal) => sum + signal.weight, 0) + segmentEvents.reduce((sum, event) => sum + event.positive, 0);
+
+    if (liminal >= 1.8 && grounded >= 1.1) return "unsettled but grounded";
+    if (liminal >= 2.1) return "transitional";
+    if (grounded >= 1.8 && positive >= negative) return segmentSignals.some((signal) => signal.label === "accepting") ? "accepting" : "present";
+    if (negative > positive + 0.8) return segmentSignals.filter((signal) => signal.tone === "negative").sort((a, b) => b.weight - a.weight)[0]?.label ?? "strained";
+    if (positive > negative + 0.8) return segmentSignals.filter((signal) => signal.tone === "positive" || signal.tone === "grounded").sort((a, b) => b.weight - a.weight)[0]?.label ?? "steady";
+    return segmentSignals.sort((a, b) => b.weight - a.weight)[0]?.label ?? "steady";
+  }
+
+  const start = segmentLabel(slices[0]);
+  const middle = segmentLabel(slices[1]);
+  const end = segmentLabel(slices[2]);
+  const direction: JournalAnalysis["emotional_shift"]["direction"] =
+    start === end
+      ? middle !== start
+        ? "mixed"
+        : "unchanged"
+      : /(present|steady|accepting|relieved|hopeful|transitional but steadier|unsettled but grounded)/i.test(end) && !/(present|steady|accepting|relieved|hopeful|transitional but steadier|unsettled but grounded)/i.test(start)
+        ? "improved"
+        : /(overwhelmed|anxious|tense|angry|frustrated|drained|sad|numb|grieving|ashamed|strained)/i.test(end) && !/(overwhelmed|anxious|tense|angry|frustrated|drained|sad|numb|grieving|ashamed|strained)/i.test(start)
+          ? "worsened"
+          : "mixed";
+
+  return { start, middle, end, direction };
+}
+
+function synthesizeInterpretation(
+  entry: string,
+  eventsResult: ReturnType<typeof extractEvents>,
+  stateResult: ReturnType<typeof extractStateSignals>,
+  supportsResult: ReturnType<typeof detectSupportsAndCoping>,
+  stressorsResult: ReturnType<typeof detectStressors>,
+  timeline: ReturnType<typeof buildEmotionalTimeline>
+) {
+  const { sentences, signals } = stateResult;
+  const { supports, copingActions, restorativeSignals } = supportsResult;
+  const { stressors, triggers } = stressorsResult;
+  const rankedStates = getRankedEmotions(
+    new Map(
+      signals.reduce<Array<[string, number]>>((accumulator, signal) => {
+        const existing = accumulator.find(([label]) => label === signal.label);
+        if (existing) {
+          existing[1] += signal.weight;
+        } else {
+          accumulator.push([signal.label, signal.weight]);
+        }
+        return accumulator;
+      }, [])
+    )
+  );
+
+  const liminalWeight = signals.filter((signal) => signal.tone === "liminal").reduce((sum, signal) => sum + signal.weight, 0);
+  const groundedWeight = signals.filter((signal) => signal.tone === "grounded").reduce((sum, signal) => sum + signal.weight, 0);
+  const positiveWeight = signals.filter((signal) => signal.tone === "positive").reduce((sum, signal) => sum + signal.weight, 0) + supports.length * 0.8 + groundedWeight;
+  const negativeWeight = signals.filter((signal) => signal.tone === "negative").reduce((sum, signal) => sum + signal.weight, 0) + stressors.length * 0.9;
+  const topSupport = supports[0];
+  const topStressor = stressors[0];
+  const centralSignals = rankedStates
+    .slice(0, 4)
+    .map(([label]) => label)
+    .filter((label) => !["reflective", "mixed"].includes(label));
+
+  let primaryEmotion = rankedStates[0]?.[0] ?? "present";
+  if (liminalWeight >= 2.4 && groundedWeight >= 1.2) primaryEmotion = "unsettled but grounded";
+  else if (liminalWeight >= 2.6 && negativeWeight < liminalWeight + 1.5) primaryEmotion = "transitional";
+  else if (groundedWeight >= 2.1 && negativeWeight <= groundedWeight + 0.6) primaryEmotion = signals.some((signal) => signal.label === "accepting") ? "accepting" : "present";
+  else if (supports.length > 0 && stressors.length > 0 && timeline.direction === "improved") primaryEmotion = "mixed recovery";
+  else if (supports.length > 0 && negativeWeight < positiveWeight) primaryEmotion = supports.some((item) => item.impact === "grounding") ? "steady" : "relieved";
+  else if (stressors.length > 0 && negativeWeight > positiveWeight + 0.8) primaryEmotion = centralSignals.find((label) => !["present", "steady", "reflective"].includes(label)) ?? primaryEmotion;
+  else if (isMeaningfulDiscomfort(sentences[Math.min(1, Math.max(0, sentences.length - 1))] ?? sentences[0])) primaryEmotion = "tender";
+
+  const secondaryEmotions = unique(
+    rankedStates
+      .map(([label]) => label)
+      .filter((label) => label !== primaryEmotion)
+      .filter((label) => !["reflective", "mixed"].includes(label))
+      .slice(0, 4)
+  );
+
+  let summary = "";
+  if (primaryEmotion === "transitional" || primaryEmotion === "unsettled but grounded") {
+    summary = topSupport
+      ? `The entry sits in a transitional space, with uncertainty still present but ${topSupport.label} helping it land in a more grounded place.`
+      : "The entry feels transitional rather than crisis-driven, holding uncertainty and awareness at the same time.";
+  } else if (topStressor && topSupport && timeline.direction === "improved") {
+    summary = `${topStressor.label} shapes the harder part of the entry, and ${topSupport.label} becomes the clearest point of steadiness as the tone shifts by the end.`;
+  } else if (topSupport && !topStressor) {
+    summary =
+      topSupport.category === "presence" || topSupport.category === "routine"
+        ? `${topSupport.label} gives the entry a quiet sense of regulation, making the overall tone feel steadier and more present.`
+        : `${topSupport.label} stands out as a meaningful support, giving the overall experience more ease than strain.`;
+  } else if (topStressor && !topSupport) {
+    summary = `${topStressor.label} is the clearest source of strain here, and the entry stays more ${primaryEmotion} than relieved.`;
+  } else {
+    summary = `The entry moves from ${timeline.start} through ${timeline.middle} and lands closer to ${timeline.end}, with an overall tone that feels ${primaryEmotion}.`;
+  }
+
+  const sentimentScore = clamp(Number(((positiveWeight - negativeWeight) / 6).toFixed(2)), -1, 1);
+  const sentiment: JournalAnalysis["sentiment"] = {
+    label: positiveWeight > 0.6 && negativeWeight > 0.6 ? "mixed" : sentimentScore > 0.2 ? "positive" : sentimentScore < -0.2 ? "negative" : "neutral",
+    score: sentimentScore
+  };
+
+  const moodScore = clamp(Math.round(5.5 + sentimentScore * 3), 1, 10);
+  const stressLevel = clamp(Math.round(3 + negativeWeight * 1.1), 1, 10);
+  const energyLevel = clamp(Math.round(5 + (supports.some((item) => item.impact === "energizing") ? 2 : 0) - (signals.some((signal) => signal.label === "drained") ? 2 : 0)), 1, 10);
+  const energyDirection: JournalAnalysis["energy_direction"] = stressLevel >= 7 ? "draining" : supports.length > 0 && positiveWeight >= negativeWeight ? "restorative" : positiveWeight > 0.8 && negativeWeight > 0.8 ? "mixed" : "neutral";
+
+  const recurringTopics = unique([
+    ...supports.map((item) => normalizeConceptLabel(item.label)).filter(shouldPromoteTopic),
+    ...stressors.map((item) => normalizeConceptLabel(item.label)).filter(shouldPromoteTopic),
+    liminalWeight >= 2.4 ? "transition" : null,
+    groundedWeight >= 1.8 ? "presence" : null,
+    signals.some((signal) => signal.label === "accepting") ? "acceptance" : null,
+    isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null
+  ]).slice(0, 5);
+
+  const themes = unique([
+    supports.some((item) => item.category === "routine" || item.category === "presence") ? "self-regulation" : null,
+    supports.some((item) => item.category === "connection") ? "connection" : null,
+    supports.some((item) => item.category === "movement") ? "movement" : null,
+    stressors.some((item) => item.category === "finance") ? "finance strain" : null,
+    stressors.some((item) => item.category === "work") ? "work pressure" : null,
+    stressors.some((item) => item.category === "conflict") ? "conflict" : null,
+    liminalWeight >= 2.4 ? "transition" : null,
+    signals.some((signal) => signal.label === "accepting") ? "acceptance" : null,
+    signals.some((signal) => signal.label === "present") ? "presence" : null,
+    isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null,
+    signals.some((signal) => signal.label === "mixed recovery") ? "emerging clarity" : null
+  ]).slice(0, 6);
+
+  return {
+    summary,
+    primaryEmotion,
+    secondaryEmotions,
+    customEmotionTerms: unique([
+      ...sentences
+        .filter((sentence) => /(felt|more present|enough|in between|between versions|steady|lighter|heavy|off|calm|tender|raw|clearer|honest|still)/i.test(sentence.sentence))
+        .map((sentence) => sentence.sentence),
+      primaryEmotion
+    ]).slice(0, 6),
+    joySources: unique([...supports.filter((item) => ["movement", "connection", "comfort", "resolution", "accomplishment", "routine"].includes(item.category)).map((item) => item.label)]).slice(0, 5),
+    gratitudeMoments: unique([
+      /grateful|thankful|appreciative/i.test(entry) ? "gratitude is named directly" : null,
+      supports[0] && timeline.direction === "improved" ? `relief around ${supports[0].label}` : null,
+      signals.some((signal) => signal.label === "accepting") ? "a quieter sense of enoughness" : null
+    ]).slice(0, 4),
+    wins: unique([
+      ...supports.filter((item) => item.category === "accomplishment" || item.category === "resolution").map((item) => item.label),
+      supports.some((item) => item.category === "presence") ? "stayed present instead of rushing past the moment" : null,
+      supports.some((item) => item.category === "routine") ? "used a small routine to steady the day" : null
+    ]).slice(0, 4),
+    whatToRepeat: unique([...supports.filter((item) => item.impact === "grounding" || item.impact === "helpful").map((item) => normalizeConceptLabel(item.label))]).slice(0, 4),
+    sentiment,
+    moodScore,
+    stressLevel,
+    energyLevel,
+    energyDirection,
+    emotionalShift: {
+      start_state: timeline.start,
+      end_state: timeline.end,
+      direction: timeline.direction
+    },
+    themes,
+    recurringTopics,
+    personalKeywords: unique([
+      ...supports.map((item) => item.label).filter((item) => item.length > 3),
+      ...stressors.map((item) => item.label).filter((item) => item.length > 3),
+      findMatch(entry, /maybe that'?s enough/i) || null,
+      findMatch(entry, /didn't solve anything but felt more present/i) || null,
+      findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null
+    ]).slice(0, 5),
+    notableEntities: unique([
+      findMatch(entry, /\bMike\b/i) || null,
+      /\bdog\b/i.test(entry) ? "dog" : null,
+      /\blaundromat\b/i.test(entry) ? "laundromat" : null,
+      /\bmanager\b/i.test(entry) ? "manager" : null,
+      /\bfamily\b/i.test(entry) ? "family" : null,
+      /\bcoffee\b/i.test(entry) ? "coffee" : null,
+      /\btea\b/i.test(entry) ? "tea" : null
+    ]),
+    restorativeSignals,
+    evidenceSpans: unique([
+      ...stressors
+        .slice(0, 2)
+        .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
+        .map((item) => JSON.stringify({ text: item.evidence, type: "stressor" as const, label: normalizeConceptLabel(item.label) })),
+      ...supports
+        .slice(0, 2)
+        .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
+        .map((item) => JSON.stringify({ text: item.evidence, type: "support" as const, label: normalizeConceptLabel(item.label) })),
+      ...signals
+        .filter((item) => ["negative", "grounded", "liminal"].includes(item.tone))
+        .slice(0, 2)
+        .map((item) => JSON.stringify({ text: item.evidence, type: "emotion" as const, label: normalizeConceptLabel(item.label) })),
+      ...recurringTopics.slice(0, 1).map((item) => JSON.stringify({ text: item, type: "topic" as const, label: item }))
+    ]).map((item) => JSON.parse(item) as JournalAnalysis["evidence_spans"][number]),
+    notablePhrases: unique([
+      findMatch(entry, /maybe that'?s enough/i) || null,
+      findMatch(entry, /didn't solve anything but felt more present/i) || null,
+      findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null,
+      ...sentences.slice(0, 2).map((sentence) => sentence.sentence)
+    ]).slice(0, 4),
+    reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null]).slice(0, 6),
+    confidence: {
+      primary_emotion: rankedStates.length > 0 ? 0.86 : 0.5,
+      triggers: stressors.length > 0 ? 0.82 : 0.42,
+      coping_actions: supports.length > 0 ? 0.84 : 0.4,
+      overall: signals.length > 0 || supports.length > 0 || stressors.length > 0 ? 0.8 : 0.46
+    },
+    supports,
+    copingActions,
+    stressors,
+    triggers
+  };
+}
+
 function firstSentenceContaining(rawText: string, phrases: string[]) {
   const sentences = rawText
     .split(/(?<=[.!?])\s+/)
@@ -886,187 +1596,53 @@ function detectSafetyAssessment(rawText: string): JournalAnalysis["safety_assess
 }
 
 function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
-  const text = rawText.toLowerCase();
-  const sentences = getSentenceSignals(rawText);
-  const emotionScores = scoreEmotionMap(sentences);
-  const stressors = extractStressors(rawText, sentences);
-  const supports = extractSupports(rawText, sentences);
-  const conflictHeavy = sentences.filter((sentence) => sentence.conflict).length >= 1 && supports.length === 0;
-  const tone = scoreOverallTone(sentences);
-  const positiveWeight = tone.positive;
-  const negativeWeight = tone.negative;
-  const sentimentScore = tone.score;
-  const primaryEmotion = derivePrimaryEmotion(emotionScores, sentimentScore, stressors, supports, conflictHeavy);
-  const secondaryEmotions = getSecondaryEmotions(emotionScores, primaryEmotion);
-  const centralSentences = getCentralSentences(sentences);
-
-  const joySources = [
-    supports.some((item) => ["movement", "routine"].includes(item.category)) ? "being outside or moving around" : null,
-    supports.some((item) => item.label === "walk with the dog") ? "time with the dog" : null,
-    /(friend|together|with my sister|with my mom|with my dad)/i.test(rawText) && supports.some((item) => item.category === "connection")
-      ? "feeling supported through connection"
-      : null,
-    supports.some((item) => item.label.toLowerCase() === "music") ? "music" : null,
-    supports.some((item) => item.category === "environment") ? "light or a calmer environment" : null
-  ].filter(Boolean) as string[];
-
-  const gratitudeMoments = [
-    text.includes("grateful") ? "a moment of gratitude is named directly" : null,
-    /(calmer|better|relieved|lighter)/i.test(rawText) ? "relief after a harder stretch" : null,
-    supports.length > 0 ? "something in the day felt supportive" : null
-  ].filter(Boolean) as string[];
-
-  const wins = [
-    text.includes("left") ? "noticed discomfort and left the situation" : null,
-    supports.some((item) => ["movement", "routine"].includes(item.category)) ? "made space for a regulating activity" : null,
-    supports.some((item) => item.category === "self-regulation") ? "paused to regulate before continuing" : null,
-    supports.some((item) => item.category === "body care") ? "followed through on a small caring routine" : null,
-    supports.some((item) => item.category === "accomplishment") ? "finished something that mattered" : null,
-    supports.some((item) => item.category === "resolution") ? "got through a situation that could have lingered" : null
-  ].filter(Boolean) as string[];
-
-  const whatToRepeat = [
-    supports[0]?.label ?? null,
-    joySources[0] ?? null,
-    /(helped|steadier|calmer|better|lighter)/i.test(rawText) && supports[0] ? supports[0].label : null
-  ].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
-
-  const personalKeywords = unique([
-    text.includes("refund call") ? "refund call" : null,
-    /mike'?s tone/i.test(rawText) ? "Mike's tone" : text.includes("mike") ? "Mike" : null,
-    text.includes("laundromat") ? "laundromat" : null,
-    ...stressors.map((item) => item.label),
-    ...supports.map((item) => item.label)
-  ]);
-
-  const notableEntities = unique([
-    findMatchedText(rawText, /\bmike\b/i) || null,
-    text.includes("dog") ? "dog" : null,
-    text.includes("laundromat") ? "laundromat" : null,
-    text.includes("manager") ? "manager" : null,
-    text.includes("family") ? "family" : null
-  ]);
-  const recurringTopics = deriveRecurringTopics(rawText, stressors, supports, notableEntities);
-  const themes = deriveThemes(rawText, stressors, supports, conflictHeavy);
-
-  const phrases = rawText
-    .split(/[.!?]/)
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  const customEmotionTerms = unique([
-    ...sentences
-      .filter((sentence) => /(felt|feeling|heavy|steady|calm|drained|anxious|hopeful|relieved|numb|low|angry|frustrated|scared|unsafe|good|fun)/i.test(sentence.sentence))
-      .map((sentence) => sentence.sentence),
-    text.includes("shaky") ? "shaky" : null,
-    text.includes("lighter") ? "lighter" : null,
-    text.includes("steadier") ? "steadier" : null
-  ]).slice(0, 6);
-
-  const restorativeSignals = unique([
-    ...supports.map((item) => item.label),
-    text.includes("steadier afterward") ? "felt steadier afterward" : null,
-    text.includes("calmer") ? "felt calmer afterward" : null,
-    ...whatToRepeat
-  ]);
-
+  const eventsResult = extractEvents(rawText);
+  const stateResult = extractStateSignals(rawText);
+  const supportsResult = detectSupportsAndCoping(rawText, eventsResult, stateResult);
+  const stressorsResult = detectStressors(rawText, eventsResult, stateResult);
+  const timeline = buildEmotionalTimeline(rawText, stateResult, supportsResult.supports, stressorsResult.stressors);
+  const interpretation = synthesizeInterpretation(rawText, eventsResult, stateResult, supportsResult, stressorsResult, timeline);
   const safetyAssessment = detectSafetyAssessment(rawText);
-  const playfulTone = sentences.some((sentence) => sentence.nonliteral);
-  const lowSignal = emotionScores.size === 0 && stressors.length === 0 && supports.length === 0;
-  const emotionalShift = deriveShift(sentences, primaryEmotion, supports.length, sentimentScore);
-  const triggers: JournalAnalysis["triggers"] = stressors.map((item) => ({
-    type:
-      item.category === "relationship" || item.category === "work" || item.category === "finance" || item.category === "family" || item.category === "health"
-        ? item.category
-        : "other",
-    description: item.evidence
-  }));
-  const copingActions: JournalAnalysis["coping_actions"] = supports.map((item) => ({
-    action: item.label,
-    impact: item.impact === "mixed" ? "neutral" : "helpful"
-  }));
 
   return validateAnalysis({
     raw_text: rawText,
-    summary: buildSummary(sentimentScore, stressors, supports, emotionalShift, lowSignal, playfulTone, conflictHeavy, primaryEmotion, centralSentences),
-    primary_emotion: primaryEmotion,
-    secondary_emotions: secondaryEmotions,
-    custom_emotion_terms: customEmotionTerms,
-    joy_sources: joySources,
-    gratitude_moments: gratitudeMoments,
-    wins,
-    what_to_repeat: whatToRepeat,
-    triggers,
-    stressors,
-    coping_actions: copingActions,
-    supports,
-    sentiment: {
-      label:
-        positiveWeight > 0 && negativeWeight > 0
-          ? "mixed"
-          : conflictHeavy || sentimentScore < -0.2
-            ? "negative"
-            : sentimentScore > 0.2
-              ? "positive"
-              : "neutral",
-      score: Number(sentimentScore.toFixed(2))
-    },
+    summary: interpretation.summary,
+    primary_emotion: interpretation.primaryEmotion,
+    secondary_emotions: interpretation.secondaryEmotions,
+    custom_emotion_terms: interpretation.customEmotionTerms,
+    joy_sources: interpretation.joySources,
+    gratitude_moments: interpretation.gratitudeMoments,
+    wins: interpretation.wins,
+    what_to_repeat: interpretation.whatToRepeat,
+    triggers: interpretation.triggers,
+    stressors: interpretation.stressors,
+    coping_actions: interpretation.copingActions,
+    supports: interpretation.supports,
+    sentiment: interpretation.sentiment,
     user_mood: null,
     user_stress: null,
     user_energy: null,
-    mood_score: clamp(Math.round(6 + sentimentScore * 4), 1, 10),
-    stress_level: clamp(Math.round(5 + negativeWeight + (conflictHeavy ? 1 : 0)), 1, 10),
-    energy_level: clamp(text.includes("drained") || text.includes("tired") ? 3 : text.includes("energized") ? 8 : supports.some((item) => item.impact === "energizing") ? 7 : 5, 1, 10),
-    energy_direction:
-      conflictHeavy || negativeWeight - positiveWeight > 2.5
-        ? "draining"
-        : supports.length > 0 && positiveWeight >= negativeWeight
-          ? "restorative"
-          : positiveWeight > 0 && negativeWeight > 0
-            ? "mixed"
-            : "neutral",
-    emotional_shift: emotionalShift,
-    themes,
-    recurring_topics: recurringTopics,
-    personal_keywords: personalKeywords,
-    notable_entities: notableEntities,
-    restorative_signals: restorativeSignals,
+    mood_score: interpretation.moodScore,
+    stress_level: interpretation.stressLevel,
+    energy_level: interpretation.energyLevel,
+    energy_direction: interpretation.energyDirection,
+    emotional_shift: interpretation.emotionalShift,
+    themes: interpretation.themes,
+    recurring_topics: interpretation.recurringTopics,
+    personal_keywords: interpretation.personalKeywords,
+    notable_entities: interpretation.notableEntities,
+    restorative_signals: interpretation.restorativeSignals,
     evidence_spans: [
-      ...stressors.slice(0, 3).map((item) => ({
-        text: item.evidence,
-        type: "stressor" as const,
-        label: item.label
-      })),
-      ...supports.slice(0, 3).map((item) => ({
-        text: item.evidence,
-        type: "support" as const,
-        label: item.label
-      })),
-      ...centralSentences.slice(0, 2).map((item) => ({
-        text: item.sentence,
-        type: "emotion" as const,
-        label: primaryEmotion
-      })),
-      ...recurringTopics.slice(0, 2).map((item) => ({
-        text: item,
-        type: "topic" as const,
-        label: item
-      })),
+      ...interpretation.evidenceSpans,
       ...safetyAssessment.evidence.map((item) => ({
         text: item,
         type: "safety" as const,
         label: "safety"
       }))
     ],
-    notable_phrases: phrases,
-    reflection_tags: Array.from(new Set([primaryEmotion, ...stressors.map((item) => item.category), supports.length > 0 ? "recovery attempt" : "active strain"])),
-    confidence: {
-      primary_emotion: lowSignal ? 0.46 : playfulTone ? 0.58 : primaryEmotion === "mixed" ? 0.64 : 0.84,
-      triggers: stressors.length > 0 ? (stressors[0]?.category === "other" ? 0.62 : 0.84) : 0.35,
-      coping_actions: supports.length > 0 ? (supports.some((item) => item.impact !== "mixed") ? 0.84 : 0.62) : 0.42,
-      overall: lowSignal ? 0.44 : playfulTone ? 0.55 : supports.length > 0 && stressors.length > 0 ? 0.76 : 0.82
-    },
+    notable_phrases: interpretation.notablePhrases,
+    reflection_tags: interpretation.reflectionTags,
+    confidence: interpretation.confidence,
     safety_assessment: safetyAssessment
   });
 }

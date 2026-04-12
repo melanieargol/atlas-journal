@@ -13,7 +13,7 @@ export function RepeatedSignalsPanel({ signals }: { signals: RepeatedSignal[] })
       <div className="section-head">
         <div>
           <p className="section-label">Repeated personal signals</p>
-          <h2>What is beginning to repeat in your own language.</h2>
+          <h2>What patterns are recurring.</h2>
         </div>
       </div>
 
