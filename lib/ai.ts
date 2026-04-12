@@ -106,6 +106,59 @@ const likelyIncidentalMovementMarkers = [
   "headed to"
 ] as const;
 
+const positiveExperienceMarkers = [
+  "fun",
+  "nice",
+  "good",
+  "beautiful",
+  "laughed",
+  "enjoyed",
+  "felt good",
+  "felt lighter",
+  "felt better",
+  "comfortable",
+  "cozy",
+  "easy",
+  "relief",
+  "relieved",
+  "resolved",
+  "finally worked",
+  "finally got",
+  "glad"
+] as const;
+
+const accomplishmentMarkers = [
+  "finished",
+  "completed",
+  "got it done",
+  "wrapped up",
+  "followed through",
+  "made progress",
+  "crossed off",
+  "cleaned",
+  "submitted",
+  "figured it out",
+  "solved"
+] as const;
+
+const disruptionMarkers = [
+  "weird",
+  "off",
+  "awkward",
+  "uncomfortable",
+  "scared",
+  "creepy",
+  "unsafe",
+  "uncertain",
+  "unexpected",
+  "suddenly",
+  "wrong",
+  "alarm",
+  "disrupted",
+  "thrown off",
+  "shaken up"
+] as const;
+
 const stressorPatterns = [
   { category: "finance", regex: /\brefund call\b/i },
   { category: "finance", regex: /\b(talking about money|talked about money|money conversation|budget|bills?|rent|refund)\b/i },
@@ -189,6 +242,23 @@ function hasRestorativeOutcome(sentence: SentenceSignal) {
 
 function hasNegativeContext(sentence: SentenceSignal) {
   return sentence.conflict || /(annoyed|angry|furious|resentful|threat|harm|insult|lash out|retaliat|shut down)/i.test(sentence.sentence);
+}
+
+function hasPositiveExperience(sentence: SentenceSignal) {
+  return (
+    positiveExperienceMarkers.some((marker) => sentence.normalized.includes(marker)) ||
+    accomplishmentMarkers.some((marker) => sentence.normalized.includes(marker)) ||
+    /(coffee with|dinner with|lunch with|hung out with|spent time with|went out with|sat with|talked with)/i.test(sentence.sentence)
+  );
+}
+
+function hasDisruptionSignal(sentence: SentenceSignal) {
+  return (
+    disruptionMarkers.some((marker) => sentence.normalized.includes(marker)) ||
+    /(didn't expect|did not expect|caught me off guard|felt unsafe|felt exposed|something was wrong|something felt wrong|got weird|went wrong|broke down|missed the train|flat tire|car trouble)/i.test(
+      sentence.sentence
+    )
+  );
 }
 
 function scoreSentenceStrength(sentence: SentenceSignal) {
@@ -324,12 +394,20 @@ function scoreOverallTone(sentences: SentenceSignal[]) {
       positive += 1.2 * sentence.positionWeight;
     }
 
+    if (hasPositiveExperience(sentence) && !hasNegativeContext(sentence)) {
+      positive += 0.9 * sentence.positionWeight * sentence.emotionalWeight;
+    }
+
     if (/(overwhelmed|anxious|hopeless|drained|tense|heavy)/i.test(sentence.sentence)) {
       negative += 1.2 * sentence.positionWeight * sentence.emotionalWeight;
     }
 
     if (hasNegativeContext(sentence)) {
       negative += 1.5 * sentence.positionWeight * sentence.emotionalWeight;
+    }
+
+    if (hasDisruptionSignal(sentence)) {
+      negative += 1.1 * sentence.positionWeight * sentence.emotionalWeight;
     }
   }
 
@@ -381,6 +459,23 @@ function extractStressors(_rawText: string, sentences: SentenceSignal[]) {
       .map(({ weight, ...item }) => item);
   }
 
+  const eventSentence = sentences.find((sentence) => hasDisruptionSignal(sentence) || /(stuck|late|upset|nervous|uncomfortable|unsafe|scared)/i.test(sentence.sentence));
+
+  if (eventSentence) {
+    return [
+      {
+        label:
+          findMatchedText(
+            eventSentence.sentence,
+            /didn't expect|did not expect|caught me off guard|felt unsafe|felt exposed|something was wrong|something felt wrong|got weird|went wrong|broke down|missed the train|flat tire|car trouble|uncomfortable|unsafe|scared|awkward/i
+          ) || "disruptive situation",
+        category: /(unsafe|scared|exposed|wrong)/i.test(eventSentence.sentence) ? "uncertainty" : "other",
+        evidence: eventSentence.sentence,
+        intensity: /(unsafe|scared|wrong|off guard)/i.test(eventSentence.sentence) ? 7 : 5
+      }
+    ];
+  }
+
   const fallbackSentence = sentences.find((sentence) => /(annoyed|stuck|late|off|weird|hard|messy|awkward|tense|upset)/i.test(sentence.sentence));
 
   if (!fallbackSentence) {
@@ -397,7 +492,7 @@ function extractStressors(_rawText: string, sentences: SentenceSignal[]) {
   ];
 }
 
-function getSupportCandidate(sentence: SentenceSignal) {
+function getSupportCandidate(sentence: SentenceSignal): JournalAnalysis["supports"][number] | null {
   if (hasNegativeContext(sentence) && !hasRestorativeOutcome(sentence)) {
     return null;
   }
@@ -460,6 +555,71 @@ function getSupportCandidate(sentence: SentenceSignal) {
     };
   }
 
+  if (
+    /(coffee with|dinner with|lunch with|hung out with|spent time with|went out with|sat with|talked with|talked to|called|texted)/i.test(sentenceText) &&
+    /(friend|partner|mom|dad|sister|brother|family|coworker)/i.test(sentenceText) &&
+    (hasPositiveExperience(sentence) || !hasNegativeContext(sentence))
+  ) {
+    return {
+      label: findMatchedText(sentenceText, /coffee with|dinner with|lunch with|hung out with|spent time with|went out with|sat with|talked with|talked to|called|texted/i) || "social connection",
+      category: "connection",
+      evidence: sentenceText,
+      impact: hasPositiveExperience(sentence) ? "validating" : classifySupportImpact(sentence)
+    };
+  }
+
+  if (
+    /(walk|run|ran|worked out|gym|hike|danced|dancing|bike|biked|swam|swimming)/i.test(sentenceText) &&
+    !likelyIncidentalMovementMarkers.some((marker) => normalized.includes(marker)) &&
+    (explicitRelief || hasPositiveExperience(sentence)) &&
+    !hasNegativeContext(sentence)
+  ) {
+    return {
+      label: findMatchedText(sentenceText, /walk|run|ran|worked out|gym|hike|danced|dancing|bike|biked|swam|swimming/i) || "movement",
+      category: "movement",
+      evidence: sentenceText,
+      impact: /(energized|energising|energizing|alive)/i.test(sentenceText) ? "energizing" : "helpful"
+    };
+  }
+
+  if (
+    accomplishmentMarkers.some((marker) => normalized.includes(marker)) &&
+    !hasNegativeContext(sentence)
+  ) {
+    return {
+      label: findMatchedText(sentenceText, /finished|completed|got it done|wrapped up|followed through|made progress|crossed off|cleaned|submitted|figured it out|solved/i) || "accomplishment",
+      category: "accomplishment",
+      evidence: sentenceText,
+      impact: "helpful"
+    };
+  }
+
+  if (
+    /(finally|ended up|turned out|worked out|resolved|sorted out|got fixed)/i.test(sentenceText) &&
+    (explicitRelief || hasPositiveExperience(sentence)) &&
+    !hasNegativeContext(sentence)
+  ) {
+    return {
+      label: findMatchedText(sentenceText, /finally|ended up|turned out|worked out|resolved|sorted out|got fixed/i) || "resolution",
+      category: "resolution",
+      evidence: sentenceText,
+      impact: "helpful"
+    };
+  }
+
+  if (
+    hasPositiveExperience(sentence) &&
+    /(music|sun|sunlight|outside|coffee|meal|breakfast|dinner|lunch|movie|show|book|game)/i.test(sentenceText) &&
+    !hasNegativeContext(sentence)
+  ) {
+    return {
+      label: findMatchedText(sentenceText, /music|sun|sunlight|outside|coffee|meal|breakfast|dinner|lunch|movie|show|book|game/i) || "positive experience",
+      category: "comfort",
+      evidence: sentenceText,
+      impact: classifySupportImpact(sentence) === "mixed" ? "helpful" : classifySupportImpact(sentence)
+    };
+  }
+
   return null;
 }
 
@@ -494,25 +654,29 @@ function extractSupports(_rawText: string, sentences: SentenceSignal[]) {
 }
 
 function deriveShift(sentences: SentenceSignal[], primaryEmotion: string, supportCount: number, toneScore: number): JournalAnalysis["emotional_shift"] {
-  const midpoint = Math.max(1, Math.ceil(sentences.length / 2));
-  const firstHalf = sentences.slice(0, midpoint);
-  const secondHalf = sentences.slice(midpoint);
-  const startSlice = firstHalf.length > 0 ? firstHalf : sentences;
-  const endSlice = secondHalf.length > 0 ? secondHalf : sentences;
+  const third = Math.max(1, Math.ceil(sentences.length / 3));
+  const startSlice = sentences.slice(0, third).length > 0 ? sentences.slice(0, third) : sentences;
+  const middleSlice = sentences.slice(third, third * 2).length > 0 ? sentences.slice(third, third * 2) : sentences;
+  const endSlice = sentences.slice(third * 2).length > 0 ? sentences.slice(third * 2) : sentences;
   const startScores = scoreEmotionMap(startSlice);
+  const middleScores = scoreEmotionMap(middleSlice);
   const endScores = scoreEmotionMap(endSlice);
 
   const startTone = scoreOverallTone(startSlice).score;
+  const middleTone = scoreOverallTone(middleSlice).score;
   const endTone = scoreOverallTone(endSlice).score;
   const startState = derivePrimaryEmotion(startScores, startTone, [], [], startSlice.some((sentence) => sentence.conflict));
   const endState = derivePrimaryEmotion(endScores, endTone, [], [], endSlice.some((sentence) => sentence.conflict));
+  const middleState = derivePrimaryEmotion(middleScores, middleTone, [], [], middleSlice.some((sentence) => sentence.conflict));
   const delta = endTone - startTone;
 
   const direction =
     Math.abs(delta) < 0.18
       ? supportCount > 0 && toneScore > -0.1
         ? "mixed"
-        : "unchanged"
+        : middleState !== startState || middleState !== endState
+          ? "mixed"
+          : "unchanged"
       : delta > 0.18
         ? "improved"
         : delta < -0.18
@@ -557,6 +721,10 @@ function buildSummary(
     return `There is clear strain around ${topStressor}, but ${topSupport} seems to bring some steadiness back into the entry by the end.`;
   }
 
+  if (topStressor && topSupport && shift.direction === "unchanged") {
+    return `${topStressor} stands out as the main difficulty, even though ${topSupport} adds a steadier or more workable note to the day.`;
+  }
+
   if (topSupport && !topStressor && toneScore >= 0) {
     return `${topSupport} stands out as a clear source of steadiness or relief in the overall experience.`;
   }
@@ -574,10 +742,14 @@ function buildSummary(
   }
 
   return toneScore < -0.15
-    ? "The entry carries more strain than relief overall, though the interpretation stays close to what is clearly supported in the writing."
+    ? topStressor
+      ? `${topStressor} seems to shape the hardest part of the entry, and the overall tone stays more strained than settled.`
+      : "The entry carries more strain than relief overall, though the interpretation stays close to what is clearly supported in the writing."
     : toneScore > 0.15
-      ? "The entry feels broadly steady or restorative overall, with support signals outweighing strain."
-      : "The entry holds a mixed emotional tone overall, with strain and steadier moments both present without one clearly taking over.";
+      ? topSupport
+        ? `${topSupport} seems to anchor the entry, and the overall tone lands steadier than strained.`
+        : "The entry feels broadly steady or restorative overall, with support signals outweighing strain."
+      : "The entry holds both strain and steadier moments, with neither side fully taking over the overall tone.";
 }
 
 function deriveRecurringTopics(
@@ -729,12 +901,12 @@ function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
   const centralSentences = getCentralSentences(sentences);
 
   const joySources = [
-    supports.some((item) => item.label.includes("walk")) ? "being outside or walking" : null,
+    supports.some((item) => ["movement", "routine"].includes(item.category)) ? "being outside or moving around" : null,
     supports.some((item) => item.label === "walk with the dog") ? "time with the dog" : null,
     /(friend|together|with my sister|with my mom|with my dad)/i.test(rawText) && supports.some((item) => item.category === "connection")
       ? "feeling supported through connection"
       : null,
-    text.includes("music") && /(enjoyed|helped|calmer|lighter|relieved|good)/i.test(rawText) ? "music" : null,
+    supports.some((item) => item.label.toLowerCase() === "music") ? "music" : null,
     supports.some((item) => item.category === "environment") ? "light or a calmer environment" : null
   ].filter(Boolean) as string[];
 
@@ -746,9 +918,11 @@ function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
 
   const wins = [
     text.includes("left") ? "noticed discomfort and left the situation" : null,
-    supports.some((item) => item.label.includes("walk")) ? "made space for a regulating activity" : null,
+    supports.some((item) => ["movement", "routine"].includes(item.category)) ? "made space for a regulating activity" : null,
     supports.some((item) => item.category === "self-regulation") ? "paused to regulate before continuing" : null,
-    supports.some((item) => item.category === "body care") ? "followed through on a small caring routine" : null
+    supports.some((item) => item.category === "body care") ? "followed through on a small caring routine" : null,
+    supports.some((item) => item.category === "accomplishment") ? "finished something that mattered" : null,
+    supports.some((item) => item.category === "resolution") ? "got through a situation that could have lingered" : null
   ].filter(Boolean) as string[];
 
   const whatToRepeat = [
@@ -783,7 +957,7 @@ function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
 
   const customEmotionTerms = unique([
     ...sentences
-      .filter((sentence) => /(felt|feeling|heavy|steady|calm|drained|anxious|hopeful|relieved|numb|low)/i.test(sentence.sentence))
+      .filter((sentence) => /(felt|feeling|heavy|steady|calm|drained|anxious|hopeful|relieved|numb|low|angry|frustrated|scared|unsafe|good|fun)/i.test(sentence.sentence))
       .map((sentence) => sentence.sentence),
     text.includes("shaky") ? "shaky" : null,
     text.includes("lighter") ? "lighter" : null,
@@ -888,10 +1062,10 @@ function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
     notable_phrases: phrases,
     reflection_tags: Array.from(new Set([primaryEmotion, ...stressors.map((item) => item.category), supports.length > 0 ? "recovery attempt" : "active strain"])),
     confidence: {
-      primary_emotion: lowSignal ? 0.46 : playfulTone ? 0.58 : primaryEmotion === "reflective" ? 0.68 : 0.8,
-      triggers: stressors.length > 0 ? (stressors[0]?.category === "other" ? 0.56 : 0.8) : 0.35,
-      coping_actions: supports.length > 0 ? (supports.some((item) => item.impact !== "mixed") ? 0.8 : 0.58) : 0.42,
-      overall: lowSignal ? 0.44 : playfulTone ? 0.55 : supports.length > 0 && stressors.length > 0 ? 0.7 : 0.76
+      primary_emotion: lowSignal ? 0.46 : playfulTone ? 0.58 : primaryEmotion === "mixed" ? 0.64 : 0.84,
+      triggers: stressors.length > 0 ? (stressors[0]?.category === "other" ? 0.62 : 0.84) : 0.35,
+      coping_actions: supports.length > 0 ? (supports.some((item) => item.impact !== "mixed") ? 0.84 : 0.62) : 0.42,
+      overall: lowSignal ? 0.44 : playfulTone ? 0.55 : supports.length > 0 && stressors.length > 0 ? 0.76 : 0.82
     },
     safety_assessment: safetyAssessment
   });

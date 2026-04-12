@@ -16,6 +16,9 @@ Rules:
 - Capture positive signal as carefully as difficult signal.
 - Distinguish central signals from incidental details.
 - Distinguish stressors from supports, grounding moments, neutral recurring topics, and restorative signals.
+- Treat concrete real-world events as first-class evidence. If something clearly happened, use that event to anchor the interpretation.
+- When an enjoyable, connecting, active, comforting, relieving, or resolving experience is clearly present, surface it as a support even if the writer does not explicitly say "this helped."
+- When an event feels disruptive, unsettling, unsafe, uncomfortable, or unexpectedly off, surface it as a stressor even if it is brief.
 - Do not classify an action as a support unless the entry gives contextual evidence that it was grounding, relieving, enjoyable, steadying, or intentionally restorative.
 - If a sentence contains aggression, hostility, insult, threat, retaliation, or confrontation, do not classify it as support unless clear recovery appears later in the entry.
 - Use broad categories for consistency, but keep specific labels grounded in the writer's own language.
@@ -31,6 +34,7 @@ Rules:
 - Detect self-harm or suicide concern carefully and conservatively. Do not over-flag ordinary sadness, but do capture indirect risk language when it is genuinely present.
 - If supports outweigh strain, let that shape the summary, emotional shift, and overall interpretation.
 - If the entry is mixed, preserve that balance rather than forcing a dominant negative reading.
+- Use the emotional flow across the entry: beginning state, any middle shift, and ending state. Let that arc shape the summary and emotional shift.
 - notable_phrases should be brief direct phrases from the entry.
 - sentiment.score must be between -1 and 1.
 - confidence values must be between 0 and 1.
