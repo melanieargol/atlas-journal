@@ -1,15 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-
-import { ResultsCard } from "@/components/ResultsCard";
-import type { JournalAnalysis } from "@/types/journal";
 
 type AnalyzeResponse =
   | {
       ok: true;
-      analysis: JournalAnalysis;
-      mode: "mock" | "openai";
+      entryId: string;
     }
   | {
       ok: false;
@@ -20,11 +17,60 @@ type AnalyzeResponse =
 const starterEntry =
   "";
 
+function CheckInControl({
+  id,
+  label,
+  description,
+  scaleLabels,
+  value,
+  onChange
+}: {
+  id: string;
+  label: string;
+  description: string;
+  scaleLabels: { min: string; mid: string; max: string };
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="checkin-card">
+      <div className="checkin-head">
+        <label className="field-label" htmlFor={id}>
+          {label}
+        </label>
+        <button className="ghost-button" type="button" onClick={() => onChange(null)}>
+          Clear
+        </button>
+      </div>
+      <p className="muted-text checkin-description">{description}</p>
+      <div className="checkin-value">{value ?? "Not set"}</div>
+      <input
+        id={id}
+        className="checkin-slider"
+        type="range"
+        min={1}
+        max={10}
+        step={1}
+        value={value ?? 5}
+        onChange={(event) => onChange(Number(event.target.value))}
+        aria-label={label}
+      />
+      <div className="checkin-scale" aria-hidden="true">
+        <span>{`1 - ${scaleLabels.min}`}</span>
+        <span>{`5 - ${scaleLabels.mid}`}</span>
+        <span>{`10 - ${scaleLabels.max}`}</span>
+      </div>
+    </div>
+  );
+}
+
 export function JournalEntryForm() {
+  const router = useRouter();
   const [rawText, setRawText] = useState(starterEntry);
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [analysis, setAnalysis] = useState<JournalAnalysis | null>(null);
-  const [mode, setMode] = useState<"mock" | "openai">("mock");
+  const [userMood, setUserMood] = useState<number | null>(null);
+  const [userStress, setUserStress] = useState<number | null>(null);
+  const [userEnergy, setUserEnergy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -41,20 +87,22 @@ export function JournalEntryForm() {
         },
         body: JSON.stringify({
           raw_text: rawText,
-          entry_date: entryDate
+          entry_date: entryDate,
+          user_mood: userMood,
+          user_stress: userStress,
+          user_energy: userEnergy
         })
       });
 
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!response.ok || payload.ok === false) {
-        setAnalysis(null);
         setError(payload.ok === false ? payload.details || payload.error : "The analysis request failed.");
         return;
       }
 
-      setAnalysis(payload.analysis);
-      setMode(payload.mode);
+      router.push(`/archive/${payload.entryId}`);
+      router.refresh();
     });
   }
 
@@ -87,7 +135,7 @@ export function JournalEntryForm() {
             onChange={(event) => setEntryDate(event.target.value)}
           />
           <p className="muted-text field-help">
-            Use the date the experience happened if you are writing about something after the fact.
+            Use the date the experience happened.
           </p>
         </div>
         <textarea
@@ -98,17 +146,51 @@ export function JournalEntryForm() {
           placeholder="Write freely. Atlas Journal will keep the original entry and add structured insight alongside it."
         />
 
+        <div className="checkin-section">
+          <div className="section-head compact-head">
+            <div>
+              <p className="section-label">Optional check-ins</p>
+              <h3>Anchor today’s trends with your own numbers.</h3>
+            </div>
+            <p className="muted-text">These are optional. Without them, Atlas Journal infers based off your entry for analysis.</p>
+          </div>
+          <div className="checkin-grid">
+            <CheckInControl
+              id="user-mood"
+              label="Mood"
+              description="How positive or negative the overall emotional tone felt."
+              scaleLabels={{ min: "very negative", mid: "neutral", max: "very positive" }}
+              value={userMood}
+              onChange={setUserMood}
+            />
+            <CheckInControl
+              id="user-stress"
+              label="Stress"
+              description="How activated, pressured, or overwhelmed your system felt."
+              scaleLabels={{ min: "very relaxed", mid: "moderate stress", max: "panic-level stress" }}
+              value={userStress}
+              onChange={setUserStress}
+            />
+            <CheckInControl
+              id="user-energy"
+              label="Energy"
+              description="How physically or mentally energized you felt overall."
+              scaleLabels={{ min: "exhausted", mid: "moderate energy", max: "very energetic" }}
+              value={userEnergy}
+              onChange={setUserEnergy}
+            />
+          </div>
+        </div>
+
         <div className="composer-footer">
           <button className="primary-button" type="button" onClick={handleSubmit} disabled={isPending}>
-            {isPending ? "Analyzing..." : "Analyze Entry"}
+            {isPending ? "Saving entry..." : "Analyze Entry"}
           </button>
-          <p className="muted-text">The original entry stays intact while Atlas Journal adds structured insight alongside it.</p>
+          <p className="muted-text">Atlas Journal will analyze your entry.</p>
         </div>
 
         {error ? <div className="error-box">{error}</div> : null}
       </section>
-
-      {analysis ? <ResultsCard analysis={analysis} mode={mode} /> : null}
     </div>
   );
 }

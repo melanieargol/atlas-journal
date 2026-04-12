@@ -52,3 +52,11 @@ export type ReminderSnapshot = {
   recentReflectionLiftRatio: number;
   nudges: NudgeItem[];
 };
+
+export type RepeatedSignal = {
+  label: string;
+  category: string;
+  count: number;
+  kind: "keyword" | "stressor" | "support" | "topic" | "restorative";
+  tone: "stress" | "support" | "topic" | "restorative";
+};

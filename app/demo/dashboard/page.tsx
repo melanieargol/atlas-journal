@@ -7,6 +7,7 @@ import { DemoRecentEntries } from "@/components/DemoRecentEntries";
 import { EmotionTrendsChart } from "@/components/EmotionTrendsChart";
 import { EnergyPatternsChart } from "@/components/EnergyPatternsChart";
 import { NudgePanel } from "@/components/NudgePanel";
+import { RepeatedSignalsPanel } from "@/components/RepeatedSignalsPanel";
 import { RestorativeInsights } from "@/components/RestorativeInsights";
 import { TriggerSourcesChart } from "@/components/TriggerSourcesChart";
 import { getDemoDashboardData } from "@/lib/demo";
@@ -31,7 +32,7 @@ export default async function DemoDashboardPage({
 }) {
   const params = searchParams ? await searchParams : undefined;
   const range = getRangeFromSearchParams(params?.range);
-  const { entries, emotionTrends, triggerSources, energyPatterns, recurringEmotions, restorativeInsights, allEntriesCount, reminderSnapshot } =
+  const { entries, emotionTrends, triggerSources, energyPatterns, recurringEmotions, emergingSignals, restorativeInsights, allEntriesCount, reminderSnapshot } =
     await getDemoDashboardData(range);
   const spotlightEntry = entries.find((entry) => entry.analysis.emotional_shift.start_state !== entry.analysis.emotional_shift.end_state) ?? entries[0];
 
@@ -91,6 +92,8 @@ export default async function DemoDashboardPage({
       </div>
 
       <NudgePanel snapshot={reminderSnapshot} />
+
+      <RepeatedSignalsPanel signals={emergingSignals} />
 
       <section id="demo-charts" className="charts-grid reveal-group">
         <EmotionTrendsChart data={emotionTrends} />

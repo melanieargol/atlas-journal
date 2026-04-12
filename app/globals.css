@@ -768,6 +768,12 @@ select {
   text-align: right;
 }
 
+.stack-subcopy {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .phrase-list {
   margin: 0;
   padding-left: 18px;
@@ -777,6 +783,88 @@ select {
 .chart-panel {
   grid-column: span 4;
   transition: transform 180ms ease, border-color 180ms ease;
+}
+
+.repeated-signals-panel {
+  margin-bottom: 18px;
+}
+
+.signal-pill-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.signal-pill {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(174, 182, 217, 0.1);
+  background: rgba(11, 15, 24, 0.76);
+}
+
+.signal-pill strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.signal-pill-stress {
+  background: linear-gradient(180deg, rgba(255, 122, 143, 0.08), rgba(16, 23, 38, 0.88));
+}
+
+.signal-pill-support {
+  background: linear-gradient(180deg, rgba(93, 210, 193, 0.08), rgba(16, 23, 38, 0.88));
+}
+
+.signal-pill-restorative {
+  background: linear-gradient(180deg, rgba(245, 176, 76, 0.08), rgba(16, 23, 38, 0.88));
+}
+
+.signal-pill-topic {
+  background: linear-gradient(180deg, rgba(125, 178, 255, 0.08), rgba(16, 23, 38, 0.88));
+}
+
+.support-banner {
+  margin-bottom: 20px;
+  padding: 24px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 126, 168, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(255, 122, 143, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    rgba(24, 15, 24, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.support-banner-high {
+  border-color: rgba(255, 126, 168, 0.34);
+}
+
+.support-banner-copy,
+.support-banner-footnote {
+  margin: 0 0 14px;
+}
+
+.support-banner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.support-resource-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(174, 182, 217, 0.1);
+}
+
+.support-resource-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
 }
 
 .chart-panel:hover,
@@ -1445,6 +1533,92 @@ select {
   color: var(--accent-amber);
 }
 
+.checkin-section {
+  margin-top: 22px;
+  padding: 20px;
+  border-radius: 28px;
+  border: 1px solid rgba(174, 182, 217, 0.12);
+  background: linear-gradient(180deg, rgba(22, 28, 48, 0.8), rgba(15, 19, 32, 0.62));
+}
+
+.compact-head {
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.checkin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.checkin-card {
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(174, 182, 217, 0.12);
+  background: rgba(11, 15, 28, 0.56);
+}
+
+.checkin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.checkin-value {
+  margin-top: 12px;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--text-strong);
+}
+
+.checkin-description {
+  margin-top: 10px;
+  min-height: 2.6em;
+}
+
+.checkin-slider {
+  width: 100%;
+  margin-top: 14px;
+  accent-color: var(--accent-sky);
+}
+
+.checkin-scale {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--muted-strong);
+  gap: 8px;
+}
+
+.checkin-scale span:nth-child(2) {
+  text-align: center;
+}
+
+.checkin-scale span:last-child {
+  text-align: right;
+}
+
+.ghost-button {
+  border: 1px solid rgba(174, 182, 217, 0.16);
+  background: rgba(174, 182, 217, 0.06);
+  color: var(--text-strong);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.ghost-button:hover,
+.ghost-button:focus-visible {
+  background: rgba(174, 182, 217, 0.1);
+  border-color: rgba(174, 182, 217, 0.26);
+  transform: translateY(-1px);
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -1511,11 +1685,25 @@ select {
   .recent-entry-list {
     grid-template-columns: 1fr;
   }
+
+  .signal-pill-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .checkin-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
   .topbar {
+    min-height: auto;
     padding-inline: 16px;
+  }
+
+  .brand-logo {
+    height: 84px;
+    transform: none;
   }
 
   .nav {
@@ -1558,7 +1746,9 @@ select {
   }
 
   .nudge-meta-row,
-  .nudge-grid {
+  .nudge-grid,
+  .support-banner-grid,
+  .signal-pill-grid {
     grid-template-columns: 1fr;
   }
 

@@ -6,6 +6,7 @@ import type {
   EmotionTrendDatum,
   EnergyPatternDatum,
   JournalRecord,
+  RepeatedSignal,
   RestorativeInsight,
   TimeRange,
   TriggerFrequencyDatum
@@ -38,13 +39,82 @@ function filterEntriesByRange(entries: JournalRecord[], range: TimeRange) {
   return entries.filter((entry) => new Date(`${entry.entry_date}T00:00:00`) >= start);
 }
 
+function formatCategoryLabel(value: string) {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getBroadStressSignals(entry: JournalRecord) {
+  if (entry.analysis.stressors.length > 0) {
+    return entry.analysis.stressors.map((item) => item.category);
+  }
+
+  return entry.analysis.triggers.map((item) => item.type);
+}
+
+function buildEmergingSignals(entries: JournalRecord[]): RepeatedSignal[] {
+  const counts = new Map<string, RepeatedSignal>();
+  const lowInformationLabels = new Set([
+    "situational strain",
+    "money",
+    "family",
+    "manager",
+    "dog"
+  ]);
+
+  function register(
+    label: string,
+    category: string,
+    kind: RepeatedSignal["kind"],
+    tone: RepeatedSignal["tone"]
+  ) {
+    const normalizedLabel = label.trim();
+
+    if (!normalizedLabel || lowInformationLabels.has(normalizedLabel.toLowerCase())) {
+      return;
+    }
+
+    const key = `${kind}:${normalizedLabel.toLowerCase()}`;
+    const existing = counts.get(key);
+
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
+    counts.set(key, {
+      label: normalizedLabel,
+      category,
+      count: 1,
+      kind,
+      tone
+    });
+  }
+
+  for (const entry of entries) {
+    entry.analysis.personal_keywords.forEach((item) => register(item, "Personal language", "keyword", "topic"));
+    entry.analysis.recurring_topics.forEach((item) => register(item, "Recurring topic", "topic", "topic"));
+    entry.analysis.restorative_signals.forEach((item) => register(item, "Restorative signal", "restorative", "restorative"));
+    entry.analysis.stressors.forEach((item) => register(item.label, formatCategoryLabel(item.category), "stressor", "stress"));
+    entry.analysis.supports.forEach((item) => register(item.label, formatCategoryLabel(item.category), "support", "support"));
+  }
+
+  return Array.from(counts.values())
+    .filter((item) => item.count >= 2)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 8);
+}
+
 function buildRestorativeInsights(entries: JournalRecord[]): RestorativeInsight[] {
   const improvedEntries = entries.filter((entry) => {
     const { analysis } = entry;
     return (
       analysis.emotional_shift.direction === "improved" ||
       analysis.energy_direction === "restorative" ||
-      (analysis.coping_actions.some((action) => action.impact === "helpful") && analysis.mood_score >= 6)
+      (analysis.coping_actions.some((action) => action.impact === "helpful") && (analysis.user_mood ?? analysis.mood_score) >= 6)
     );
   });
 
@@ -182,20 +252,20 @@ export function buildDemoDashboardData(allEntries: JournalRecord[], range: TimeR
   for (const entry of [...entries].reverse()) {
     emotionCounts.set(entry.analysis.primary_emotion, (emotionCounts.get(entry.analysis.primary_emotion) ?? 0) + 1);
 
-    for (const trigger of entry.analysis.triggers) {
-      triggerCounts.set(trigger.type, (triggerCounts.get(trigger.type) ?? 0) + 1);
+    for (const signal of getBroadStressSignals(entry)) {
+      triggerCounts.set(signal, (triggerCounts.get(signal) ?? 0) + 1);
     }
 
     emotionTrends.push({
       date: entry.entry_date,
-      mood_score: entry.analysis.mood_score,
-      stress_level: entry.analysis.stress_level,
+      mood_score: entry.analysis.user_mood ?? entry.analysis.mood_score,
+      stress_level: entry.analysis.user_stress ?? entry.analysis.stress_level,
       primary_emotion: entry.analysis.primary_emotion
     });
 
     energyPatterns.push({
       date: entry.entry_date,
-      energy_level: entry.analysis.energy_level
+      energy_level: entry.analysis.user_energy ?? entry.analysis.energy_level
     });
   }
 
@@ -215,6 +285,7 @@ export function buildDemoDashboardData(allEntries: JournalRecord[], range: TimeR
     triggerSources,
     energyPatterns,
     recurringEmotions,
+    emergingSignals: buildEmergingSignals(entries),
     emotionCloud: getDemoEmotionCloud(entries),
     restorativeInsights: buildRestorativeInsights(entries),
     reminderSnapshot: buildReminderSnapshot(allEntries)

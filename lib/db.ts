@@ -3,9 +3,14 @@ import { buildReminderSnapshot } from "@/lib/nudges";
 import {
   confidenceSchema,
   copingActionSchema,
+  defaultSafetyAssessment,
   emotionalShiftSchema,
+  evidenceSpanSchema,
   journalAnalysisSchema,
+  safetyAssessmentSchema,
   sentimentSchema,
+  stressorSchema,
+  supportSchema,
   triggerSchema
 } from "@/lib/schema";
 import type {
@@ -14,6 +19,7 @@ import type {
   EnergyPatternDatum,
   JournalAnalysis,
   JournalRecord,
+  RepeatedSignal,
   RestorativeInsight,
   TimeRange,
   TriggerFrequencyDatum
@@ -53,7 +59,7 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
 }
 
 function sanitizeStringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value) ? Array.from(new Set(value.filter((item): item is string => typeof item === "string"))) : [];
 }
 
 function inferEnergyDirection(analysis: Record<string, unknown>): JournalAnalysis["energy_direction"] {
@@ -84,30 +90,135 @@ function inferEnergyDirection(analysis: Record<string, unknown>): JournalAnalysi
   return "neutral";
 }
 
+function formatCategoryLabel(value: string) {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function deriveStressors(
+  analysis: Record<string, unknown>,
+  triggers: JournalAnalysis["triggers"]
+): JournalAnalysis["stressors"] {
+  const stressors = collectValidItems(analysis.stressors, stressorSchema);
+
+  if (stressors.length > 0) {
+    return stressors;
+  }
+
+  return triggers.map((trigger) => ({
+    label: trigger.description,
+    category: trigger.type,
+    evidence: trigger.description,
+    intensity: clampNumber(analysis.stress_level, 1, 10, 5)
+  }));
+}
+
+function deriveSupports(
+  analysis: Record<string, unknown>,
+  copingActions: JournalAnalysis["coping_actions"]
+): JournalAnalysis["supports"] {
+  const supports = collectValidItems(analysis.supports, supportSchema);
+
+  if (supports.length > 0) {
+    return supports;
+  }
+
+  return copingActions
+    .filter((action) => action.impact === "helpful")
+    .map((action) => ({
+      label: action.action,
+      category: "routine",
+      evidence: action.action,
+      impact: "helpful" as const
+    }));
+}
+
+function deriveEvidenceSpans(
+  analysis: Record<string, unknown>,
+  customEmotionTerms: string[],
+  stressors: JournalAnalysis["stressors"],
+  supports: JournalAnalysis["supports"],
+  recurringTopics: string[],
+  safetyAssessment: JournalAnalysis["safety_assessment"]
+): JournalAnalysis["evidence_spans"] {
+  const evidenceSpans = collectValidItems(analysis.evidence_spans, evidenceSpanSchema);
+
+  if (evidenceSpans.length > 0) {
+    return evidenceSpans;
+  }
+
+  return [
+    ...customEmotionTerms.slice(0, 3).map((term) => ({
+      text: term,
+      type: "emotion" as const,
+      label: term
+    })),
+    ...stressors.slice(0, 3).map((item) => ({
+      text: item.evidence,
+      type: "stressor" as const,
+      label: item.label
+    })),
+    ...supports.slice(0, 3).map((item) => ({
+      text: item.evidence,
+      type: "support" as const,
+      label: item.label
+    })),
+    ...recurringTopics.slice(0, 3).map((topic) => ({
+      text: topic,
+      type: "topic" as const,
+      label: topic
+    })),
+    ...safetyAssessment.evidence.slice(0, 2).map((item) => ({
+      text: item,
+      type: "safety" as const,
+      label: "safety"
+    }))
+  ];
+}
+
 function normalizeAnalysis(input: unknown): JournalAnalysis | null {
   if (!input || typeof input !== "object") {
     return null;
   }
 
   const analysis = input as Record<string, unknown>;
+  const triggers = collectValidItems(analysis.triggers, triggerSchema);
+  const copingActions = collectValidItems(analysis.coping_actions, copingActionSchema);
+  const customEmotionTerms = sanitizeStringArray(analysis.custom_emotion_terms);
+  const recurringTopics = sanitizeStringArray(analysis.recurring_topics);
+  const safetyAssessment = safetyAssessmentSchema.catch(defaultSafetyAssessment).parse(analysis.safety_assessment);
+  const stressors = deriveStressors(analysis, triggers);
+  const supports = deriveSupports(analysis, copingActions);
+  const restorativeSignals = sanitizeStringArray(analysis.restorative_signals);
+  const personalKeywords = sanitizeStringArray(analysis.personal_keywords);
+  const notableEntities = sanitizeStringArray(analysis.notable_entities);
 
   const normalized: JournalAnalysis = {
     raw_text: typeof analysis.raw_text === "string" ? analysis.raw_text : "",
     summary: typeof analysis.summary === "string" ? analysis.summary : "",
     primary_emotion: typeof analysis.primary_emotion === "string" ? analysis.primary_emotion : "reflective",
     secondary_emotions: sanitizeStringArray(analysis.secondary_emotions),
+    custom_emotion_terms: customEmotionTerms,
     joy_sources: sanitizeStringArray(analysis.joy_sources),
     gratitude_moments: sanitizeStringArray(analysis.gratitude_moments),
     wins: sanitizeStringArray(analysis.wins),
     what_to_repeat: sanitizeStringArray(analysis.what_to_repeat),
-    triggers: collectValidItems(analysis.triggers, triggerSchema),
-    coping_actions: collectValidItems(analysis.coping_actions, copingActionSchema),
+    triggers,
+    stressors,
+    coping_actions: copingActions,
+    supports,
     sentiment: sentimentSchema
       .catch({
         label: "neutral",
         score: 0
       })
       .parse(analysis.sentiment),
+    user_mood: analysis.user_mood === null ? null : typeof analysis.user_mood === "number" ? clampNumber(analysis.user_mood, 1, 10, 5) : null,
+    user_stress: analysis.user_stress === null ? null : typeof analysis.user_stress === "number" ? clampNumber(analysis.user_stress, 1, 10, 5) : null,
+    user_energy: analysis.user_energy === null ? null : typeof analysis.user_energy === "number" ? clampNumber(analysis.user_energy, 1, 10, 5) : null,
     mood_score: clampNumber(analysis.mood_score, 1, 10, 5),
     stress_level: clampNumber(analysis.stress_level, 1, 10, 5),
     energy_level: clampNumber(analysis.energy_level, 1, 10, 5),
@@ -120,6 +231,33 @@ function normalizeAnalysis(input: unknown): JournalAnalysis | null {
       })
       .parse(analysis.emotional_shift),
     themes: sanitizeStringArray(analysis.themes),
+    recurring_topics: recurringTopics.length > 0 ? recurringTopics : sanitizeStringArray(analysis.themes),
+    personal_keywords:
+      personalKeywords.length > 0
+        ? personalKeywords
+        : Array.from(
+            new Set([
+              ...stressors.map((item) => item.label),
+              ...supports.map((item) => item.label),
+              ...sanitizeStringArray(analysis.notable_phrases)
+            ])
+          ).slice(0, 8),
+    notable_entities:
+      notableEntities.length > 0
+        ? notableEntities
+        : Array.from(new Set([...stressors.map((item) => item.label), ...supports.map((item) => item.label)])).slice(0, 8),
+    restorative_signals:
+      restorativeSignals.length > 0
+        ? restorativeSignals
+        : Array.from(new Set([...sanitizeStringArray(analysis.what_to_repeat), ...supports.map((item) => item.label)])).slice(0, 8),
+    evidence_spans: deriveEvidenceSpans(
+      analysis,
+      customEmotionTerms,
+      stressors,
+      supports,
+      recurringTopics.length > 0 ? recurringTopics : sanitizeStringArray(analysis.themes),
+      safetyAssessment
+    ),
     notable_phrases: sanitizeStringArray(analysis.notable_phrases),
     reflection_tags: sanitizeStringArray(analysis.reflection_tags),
     confidence: confidenceSchema
@@ -129,7 +267,8 @@ function normalizeAnalysis(input: unknown): JournalAnalysis | null {
         coping_actions: 0.5,
         overall: 0.5
       })
-      .parse(analysis.confidence)
+      .parse(analysis.confidence),
+    safety_assessment: safetyAssessment
   };
 
   const parsed = journalAnalysisSchema.safeParse(normalized);
@@ -246,7 +385,8 @@ export async function updateEntry(id: string, updates: { analysis: JournalAnalys
     .from("journal_entries")
     .update({
       entry_date: updates.entry_date,
-      analysis: updates.analysis
+      analysis: updates.analysis,
+      raw_text: updates.analysis.raw_text
     })
     .eq("id", id)
     .eq("user_id", user.id)
@@ -312,13 +452,74 @@ function filterEntriesByRange(entries: JournalRecord[], range: TimeRange) {
   return entries.filter((entry) => new Date(`${entry.entry_date}T00:00:00`) >= start);
 }
 
+function getBroadStressSignals(entry: JournalRecord) {
+  if (entry.analysis.stressors.length > 0) {
+    return entry.analysis.stressors.map((item) => item.category);
+  }
+
+  return entry.analysis.triggers.map((item) => item.type);
+}
+
+function buildEmergingSignals(entries: JournalRecord[]): RepeatedSignal[] {
+  const counts = new Map<string, RepeatedSignal>();
+  const lowInformationLabels = new Set([
+    "situational strain",
+    "money",
+    "family",
+    "manager",
+    "dog"
+  ]);
+
+  function register(
+    label: string,
+    category: string,
+    kind: RepeatedSignal["kind"],
+    tone: RepeatedSignal["tone"]
+  ) {
+    const normalizedLabel = label.trim();
+
+    if (!normalizedLabel || lowInformationLabels.has(normalizedLabel.toLowerCase())) {
+      return;
+    }
+
+    const key = `${kind}:${normalizedLabel.toLowerCase()}`;
+    const existing = counts.get(key);
+
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
+    counts.set(key, {
+      label: normalizedLabel,
+      category,
+      count: 1,
+      kind,
+      tone
+    });
+  }
+
+  for (const entry of entries) {
+    entry.analysis.personal_keywords.forEach((item) => register(item, "Personal language", "keyword", "topic"));
+    entry.analysis.recurring_topics.forEach((item) => register(item, "Recurring topic", "topic", "topic"));
+    entry.analysis.restorative_signals.forEach((item) => register(item, "Restorative signal", "restorative", "restorative"));
+    entry.analysis.stressors.forEach((item) => register(item.label, formatCategoryLabel(item.category), "stressor", "stress"));
+    entry.analysis.supports.forEach((item) => register(item.label, formatCategoryLabel(item.category), "support", "support"));
+  }
+
+  return Array.from(counts.values())
+    .filter((item) => item.count >= 2)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 8);
+}
+
 function buildRestorativeInsights(entries: JournalRecord[]): RestorativeInsight[] {
   const improvedEntries = entries.filter((entry) => {
     const { analysis } = entry;
     return (
       analysis.emotional_shift.direction === "improved" ||
       analysis.energy_direction === "restorative" ||
-      (analysis.coping_actions.some((action) => action.impact === "helpful") && analysis.mood_score >= 6)
+      (analysis.coping_actions.some((action) => action.impact === "helpful") && (analysis.user_mood ?? analysis.mood_score) >= 6)
     );
   });
 
@@ -432,20 +633,20 @@ export async function getDashboardData(range: TimeRange = "all") {
   for (const entry of [...entries].reverse()) {
     emotionCounts.set(entry.analysis.primary_emotion, (emotionCounts.get(entry.analysis.primary_emotion) ?? 0) + 1);
 
-    for (const trigger of entry.analysis.triggers) {
-      triggerCounts.set(trigger.type, (triggerCounts.get(trigger.type) ?? 0) + 1);
+    for (const signal of getBroadStressSignals(entry)) {
+      triggerCounts.set(signal, (triggerCounts.get(signal) ?? 0) + 1);
     }
 
     emotionTrends.push({
       date: entry.entry_date,
-      mood_score: entry.analysis.mood_score,
-      stress_level: entry.analysis.stress_level,
+      mood_score: entry.analysis.user_mood ?? entry.analysis.mood_score,
+      stress_level: entry.analysis.user_stress ?? entry.analysis.stress_level,
       primary_emotion: entry.analysis.primary_emotion
     });
 
     energyPatterns.push({
       date: entry.entry_date,
-      energy_level: entry.analysis.energy_level
+      energy_level: entry.analysis.user_energy ?? entry.analysis.energy_level
     });
   }
 
@@ -465,6 +666,7 @@ export async function getDashboardData(range: TimeRange = "all") {
     triggerSources,
     energyPatterns,
     recurringEmotions,
+    emergingSignals: buildEmergingSignals(entries),
     restorativeInsights: buildRestorativeInsights(entries),
     reminderSnapshot: buildReminderSnapshot(allEntries)
   };

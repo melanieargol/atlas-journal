@@ -23,15 +23,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const body = await request.json();
     const input = validateUpdateEntryInput(body);
+    const hasUserMood = Object.prototype.hasOwnProperty.call(input, "user_mood");
+    const hasUserStress = Object.prototype.hasOwnProperty.call(input, "user_stress");
+    const hasUserEnergy = Object.prototype.hasOwnProperty.call(input, "user_energy");
+
+    const mergedCheckIns = {
+      user_mood: hasUserMood ? input.user_mood ?? null : existing.analysis.user_mood ?? null,
+      user_stress: hasUserStress ? input.user_stress ?? null : existing.analysis.user_stress ?? null,
+      user_energy: hasUserEnergy ? input.user_energy ?? null : existing.analysis.user_energy ?? null
+    };
 
     const nextAnalysis = input.reanalyze
       ? validateAnalysis({
           ...(await analyzeEntry(input.raw_text)).analysis,
-          raw_text: input.raw_text
+          raw_text: input.raw_text,
+          ...mergedCheckIns
         })
       : validateAnalysis({
           ...existing.analysis,
-          raw_text: input.raw_text
+          raw_text: input.raw_text,
+          ...mergedCheckIns
         });
 
     const updated = await updateEntry(id, {

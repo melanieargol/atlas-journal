@@ -104,7 +104,7 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
       <section className="panel entry-summary-panel">
         <div className="section-head">
           <div>
-            <p className="section-label">Archive detail</p>
+            <p className="section-label">Saved entry</p>
             <h2>{formatDate(currentEntry.entry_date)}</h2>
           </div>
           <div className="entry-stats">
@@ -113,10 +113,11 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
           </div>
         </div>
         <p className="muted-text">
-          This view keeps the full raw entry alongside the structured analysis so patterns can be revisited with more context. The experience date can differ from when the note was actually written.
+          View your entry and analysis. </p>
+        <p  className="muted-text"> Note: The experience date can differ from when the note was actually written.
         </p>
         <div className="entry-meta-stack">
-          <p className="muted-text">Entry date: {formatDate(currentEntry.entry_date)}</p>
+          
           <p className="muted-text">Written at: {new Date(currentEntry.created_at).toLocaleString()}</p>
         </div>
 

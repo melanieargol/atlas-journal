@@ -6,6 +6,7 @@ import { DashboardRangeFilter } from "@/components/DashboardRangeFilter";
 import { EmotionTrendsChart } from "@/components/EmotionTrendsChart";
 import { EnergyPatternsChart } from "@/components/EnergyPatternsChart";
 import { NudgePanel } from "@/components/NudgePanel";
+import { RepeatedSignalsPanel } from "@/components/RepeatedSignalsPanel";
 import { RestorativeInsights } from "@/components/RestorativeInsights";
 import { TriggerSourcesChart } from "@/components/TriggerSourcesChart";
 import { requireUser } from "@/lib/auth";
@@ -32,7 +33,7 @@ export default async function DashboardPage({
   await requireUser();
   const params = searchParams ? await searchParams : undefined;
   const range = getRangeFromSearchParams(params?.range);
-  const { entries, emotionTrends, triggerSources, energyPatterns, recurringEmotions, restorativeInsights, allEntriesCount, reminderSnapshot } =
+  const { entries, emotionTrends, triggerSources, energyPatterns, recurringEmotions, emergingSignals, restorativeInsights, allEntriesCount, reminderSnapshot } =
     await getDashboardData(range);
   const spotlightEntry = entries.find((entry) => entry.analysis.emotional_shift.start_state !== entry.analysis.emotional_shift.end_state) ?? entries[0];
 
@@ -86,6 +87,8 @@ export default async function DashboardPage({
       <DashboardRangeFilter activeRange={range} />
 
       <NudgePanel snapshot={reminderSnapshot} />
+
+      <RepeatedSignalsPanel signals={emergingSignals} />
 
       <section className="charts-grid reveal-group">
         <EmotionTrendsChart data={emotionTrends} />

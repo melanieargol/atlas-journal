@@ -1,207 +1,180 @@
 # Atlas Journal
 
-Atlas Journal is a production-ready emotional intelligence journaling platform that transforms raw journaling into structured emotional insight.
+Atlas Journal is a production-ready journaling app that turns raw writing into emotionally intelligent, structured reflection.
 
-Instead of static entries, it surfaces patterns over time — emotional movement, recurring triggers, and restorative signals — so reflection becomes something you can actually revisit and understand.
+It supports two parallel experiences:
+- a private authenticated product with Supabase-backed user data
+- a fully separate demo mode with seeded sample entries for public showcase use
 
-This project includes:
-- A full journaling experience with authenticated user data
-- A recruiter-friendly interactive demo mode (no sign-in required)
-- A pattern dashboard that highlights emotional trends over time
+## Live app
 
-## Preview
+- Production: [https://atlasjournal.dev](https://atlasjournal.dev)
+- Local development: `http://localhost:3000`
 
-<p align="center">
-  <img src="screenshots/01-main.png" width="80%" />
-</p>
+## What Atlas Journal does
 
-<p align="center">
-  <img src="screenshots/02-dashboard.png" width="80%" />
-</p>
+- preserves the original journal text
+- analyzes emotional movement, stressors, supports, recurring topics, and restorative signals
+- lets users optionally add mood, stress, and energy check-ins that take priority in trend charts
+- keeps broad categories stable for charts while preserving personal language for richer insight
+- surfaces repeated personal signals over time
+- shows a dedicated support banner for higher-concern entries
 
-<p align="center">
-  <img src="screenshots/03-visual-trends.png" width="80%" />
-</p>
+## Core product areas
 
-<p align="center">
-  <img src="screenshots/04-insights.png" width="80%" />
-</p>
+- Journal composer with AI-assisted analysis
+- Dashboard for emotion trends, trigger sources, energy patterns, and repeated signals
+- Archive with search, filters, and entry detail views
+- Demo mode that mirrors the real product without touching real account data
+- Supabase email magic-link authentication for private accounts
 
-<p align="center">
-  <img src="screenshots/05-journal-entry.png" width="80%" />
-</p>
+## Architecture
 
-<p align="center">
-  <img src="screenshots/06-entry-summary.png" width="80%" />
-</p>
+### App shell
 
-<p align="center">
-  <img src="screenshots/07-nudges.png" width="80%" />
-</p>
+- `app/`
+  - App Router pages for home, demo, auth, journal, archive, and dashboard
 
-<p align="center">
-  <img src="screenshots/08-search-archive.png" width="80%" />
-</p>
+### Shared components
 
-<p align="center">
-  <img src="screenshots/09-filter.png" width="80%" />
-</p>
+- `components/AppFrame.tsx`
+  - shared layout and navigation for both demo and authenticated product surfaces
+- `components/ResultsCard.tsx`
+  - renders structured analysis for live and archived entries
+- `components/SafetySupportCard.tsx`
+  - shows the dedicated support banner for moderate and high concern entries
+- `components/RepeatedSignalsPanel.tsx`
+  - surfaces repeated personal signals on the dashboard
 
-<p align="center">
-  <img src="screenshots/10-login.png" width="80%" />
-</p>
+### Analysis layer
 
+- `lib/ai.ts`
+  - AI call + local fallback analysis
+- `lib/schema.ts`
+  - Zod schema for analysis, adaptive fields, repeated-signal support, and safety assessment
+- `lib/validators.ts`
+  - request and analysis validation helpers
 
+### Data layer
 
-## 🌐 Live App
+- `lib/db.ts`
+  - authenticated Supabase-backed journal storage and dashboard aggregation
+- `lib/demo.ts`
+  - separate seeded demo data loader and dashboard aggregation
+- `lib/supabase/`
+  - browser, server, and proxy Supabase helpers
 
-👉 [https://atlasjournal.dev](https://atlasjournal.dev)
+### Seed/demo data
 
----
+- `data/demoEntries.json`
+  - seeded public showcase data used only in demo mode
+- `data/sampleEntries.json`
+  - local sample analysis data used by the fallback analyzer
 
-## 🧠 What makes this different
+## Authentication
 
-Most journaling apps:
+- Supabase Auth with email magic links
+- callback route: `/auth/callback`
+- sign-out route: `/auth/sign-out`
+- protected product routes redirect unauthenticated users to sign-in
+- demo mode does not require authentication and does not access private user data
 
-* store entries
-* maybe show mood charts
+## Analysis model
 
-**Atlas Journal:**
+Atlas Journal uses a hybrid analysis model:
 
-* extracts emotional signals from unstructured writing
-* identifies patterns over time
-* surfaces *behavioral insights*
-* reinforces positive habits through personalized nudges
+- stable fields for charts and longitudinal patterns
+- adaptive fields that preserve user-specific language
 
-👉 It turns reflection into **actionable self-awareness**
+Current analysis includes:
 
----
+- `raw_text`
+- `summary`
+- `primary_emotion`
+- `secondary_emotions`
+- `custom_emotion_terms`
+- `stressors`
+- `supports`
+- `themes`
+- `recurring_topics`
+- `personal_keywords`
+- `notable_entities`
+- `restorative_signals`
+- `evidence_spans`
+- `mood_score`
+- `stress_level`
+- `energy_level`
+- `energy_direction`
+- `emotional_shift`
+- `reflection_tags`
+- `confidence`
+- `safety_assessment`
 
-## ⚙️ Core capabilities
+## Safety support behavior
 
-* ✍️ Free-form journaling (raw input)
-* 🧠 AI-powered emotional analysis
-* 📊 Trend tracking (emotion, stress, energy)
-* 🔍 Search + archive system
-* 🧭 Pattern recognition (triggers, coping, themes)
-* 💡 Restorative insights (what helps vs. harms)
-* 🔁 Behavioral nudges based on user patterns
-* 🔐 Secure user authentication (Supabase magic link)
-* ☁️ User-scoped cloud data storage (Postgres via Supabase)
+Atlas Journal includes a support escalation layer for entries that appear more concerning.
 
----
+- `none` and `low` concern entries continue through the normal flow
+- `moderate` and `high` concern entries show a dedicated support banner above the rest of the analysis
+- the banner includes:
+  - 988 for the U.S. and territories
+  - Samaritans 116 123 for the UK and Ireland
+  - guidance to contact local emergency services if there may be immediate danger
 
-## 🧩 Data pipeline
+This is a support layer, not a diagnostic feature.
 
-```text
-Raw Journal Entry
-        ↓
-AI Extraction Layer
-        ↓
-Structured Emotional Schema
-        ↓
-User-Scoped Storage (Supabase)
-        ↓
-Aggregation + Trend Analysis
-        ↓
-Insights + Nudges + Dashboard
+## Demo mode
+
+Demo mode is intentionally separate from private account data.
+
+- routes live under `/demo`
+- data comes from `data/demoEntries.json`
+- demo users can explore dashboard, archive, search, and detail views
+- demo mode is read-only
+
+## Environment variables
+
+Create a local `.env.local` with:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+OPENAI_API_KEY=
 ```
 
----
+Notes:
+- `OPENAI_API_KEY` is optional. If it is missing, Atlas Journal uses the local mock/fallback analyzer.
+- Supabase email delivery is configured through your Supabase Auth settings. If Supabase is using Resend SMTP, that is managed in Supabase rather than in app runtime code.
 
-## 🧪 Demo Mode
-
-Atlas Journal includes a **demo mode** that allows full exploration without authentication.
-
-* Uses pre-seeded sample entries
-* Mirrors real app behavior
-* Allows recruiters/users to explore instantly
-
----
-
-## 📁 Key files
-
-* `lib/schema.ts`
-  Zod validation for the structured analysis shape
-
-* `analyzeEntry.prompt.txt`
-  Extraction rules used for AI analysis
-
-* `data/demoEntries.json`
-  Sample data used for demo mode
-
----
-
-## 🧱 File structure (simplified)
-
-```text
-app/
-  api/analyze/route.ts
-  archive/
-  dashboard/
-  journal/
-  auth/
-
-components/
-  AppFrame.tsx
-  ArchiveEntryList.tsx
-  DashboardRangeFilter.tsx
-  JournalEntryForm.tsx
-  ResultsCard.tsx
-
-lib/
-  ai.ts
-  supabase/
-  schema.ts
-
-```
-
----
-
-## 🔐 Authentication
-
-* Magic link email authentication (Supabase)
-* Emails are delivered through your Supabase auth email configuration
-* Redirects return through `/auth/callback` on the active app origin
-
----
-
-## 🚀 Local development
+## Local development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open:
+Then open `http://localhost:3000`.
 
-```text
-http://localhost:3000
-```
+## Production notes
 
----
+- production domain: `https://atlasjournal.dev`
+- preview deployments may run on Vercel URLs
+- Supabase redirect URLs should include:
+  - `https://atlasjournal.dev/auth/callback`
+  - your Vercel preview callback URL
+  - `http://localhost:3000/auth/callback`
 
-## ⚠️ Environment variables
+## Tech stack
 
-You will need:
+- Next.js
+- TypeScript
+- Supabase Auth
+- Supabase Postgres
+- Zod
+- Recharts
 
-```text
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-OPENAI_API_KEY=
-```
+## Notes
 
----
-
-## 🛠 Tech Stack
-
-Next.js · TypeScript · Supabase · Postgres · Tailwind CSS · Resend
-
----
-
-## ✨ Notes
-
-* All analysis is validated with Zod before saving
-* Each user’s data is isolated and secure
-* Demo mode is fully separate from real user data
-* Designed as a production-ready MVP with clear extension paths
+- All analysis is validated with Zod before saving.
+- Older records are normalized safely on read so schema expansion does not break the archive or dashboard.
+- Demo data remains fully separate from real user data.

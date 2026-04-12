@@ -57,7 +57,10 @@ export async function POST(request: Request) {
     try {
       validated = validateAnalysis({
         ...analysis,
-        raw_text: input.raw_text
+        raw_text: input.raw_text,
+        user_mood: input.user_mood ?? null,
+        user_stress: input.user_stress ?? null,
+        user_energy: input.user_energy ?? null
       });
     } catch (error) {
       console.error("validateAnalysis failed:", error);
@@ -73,8 +76,9 @@ export async function POST(request: Request) {
       );
     }
 
+    let savedEntry;
     try {
-      await saveEntry(validated, entryDate);
+      savedEntry = await saveEntry(validated, entryDate);
     } catch (error) {
       console.error("saveEntry failed:", error);
 
@@ -91,7 +95,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       analysis: validated,
-      mode
+      mode,
+      entryId: savedEntry.id
     });
   } catch (error) {
     return NextResponse.json(

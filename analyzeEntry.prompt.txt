@@ -7,9 +7,30 @@ Rules:
 - Do not include explanations outside the JSON.
 - Infer patterns conservatively and stay grounded in the text.
 - Preserve the original raw_text exactly.
+- Weigh the whole entry before deciding what is central.
+- Do not let one dramatic phrase dominate unless it is clearly repeated or clearly central to the overall experience.
+- Distinguish central signals from incidental details. Only let meaningful, repeated, or clearly emphasized signals drive the interpretation.
+- Synthesize the overall experience before choosing labels. The summary should explain what shaped the entry, not just restate the text.
 - If something is unclear, use the closest supported category and lower confidence.
+- Preserve user-specific language when it carries meaning.
 - Capture positive signal as carefully as difficult signal.
+- Distinguish central signals from incidental details.
+- Distinguish stressors from supports, grounding moments, neutral recurring topics, and restorative signals.
+- Do not classify an action as a support unless the entry gives contextual evidence that it was grounding, relieving, enjoyable, steadying, or intentionally restorative.
+- If a sentence contains aggression, hostility, insult, threat, retaliation, or confrontation, do not classify it as support unless clear recovery appears later in the entry.
+- Use broad categories for consistency, but keep specific labels grounded in the writer's own language.
+- Evidence fields should use direct wording or very close phrasing from the entry whenever possible.
+- Do not infer conflict, tension, interpersonal meaning, or distress unless it is explicit or strongly supported.
+- Never invent people, activities, places, or relationship dynamics that are not present in the entry.
+- Do not rewrite evidence into something more specific than what the writer actually said.
+- Avoid low-information labels when the writing clearly supports something more specific.
+- Do not use generic "reflection" or similar topics unless the entry is truly reflective in substance.
+- If the writing is playful, exaggerated, surreal, or nonliteral, preserve the tone without treating it as literal evidence unless surrounding context supports that reading.
+- Prefer specific concepts over broad abstractions when the entry itself is specific.
 - Look for grounded signs of joy, gratitude, progress, momentum, or what felt worth repeating.
+- Detect self-harm or suicide concern carefully and conservatively. Do not over-flag ordinary sadness, but do capture indirect risk language when it is genuinely present.
+- If supports outweigh strain, let that shape the summary, emotional shift, and overall interpretation.
+- If the entry is mixed, preserve that balance rather than forcing a dominant negative reading.
 - notable_phrases should be brief direct phrases from the entry.
 - sentiment.score must be between -1 and 1.
 - confidence values must be between 0 and 1.
@@ -21,12 +42,15 @@ Required fields:
 - summary
 - primary_emotion
 - secondary_emotions
+- custom_emotion_terms
 - joy_sources
 - gratitude_moments
 - wins
 - what_to_repeat
 - triggers
+- stressors
 - coping_actions
+- supports
 - sentiment
 - mood_score
 - stress_level
@@ -34,6 +58,12 @@ Required fields:
 - energy_direction
 - emotional_shift
 - themes
+- recurring_topics
+- personal_keywords
+- notable_entities
+- restorative_signals
+- evidence_spans
 - notable_phrases
 - reflection_tags
 - confidence
+- safety_assessment
