@@ -33,20 +33,12 @@ const emotionLexicon = [
 const explicitEmotionLexicon = [
   { label: "overwhelmed", regex: /\boverwhelmed|flooded|too much\b/i, tone: "negative", score: 2.2 },
   { label: "anxious", regex: /\banxious|nervous|panicky|on edge|wired\b/i, tone: "negative", score: 2 },
-  { label: "fearful", regex: /\bafraid|fearful|scared|terrified\b/i, tone: "negative", score: 2.2 },
-  { label: "alarmed", regex: /\balarmed|startled|jolted|spooked\b/i, tone: "negative", score: 2.1 },
   { label: "tense", regex: /\btense|pressure|tight|stressed\b/i, tone: "negative", score: 1.8 },
   { label: "angry", regex: /\bangry|furious|rage|resentful|hostile\b/i, tone: "negative", score: 2.2 },
-  { label: "rageful", regex: /\brage|enraged\b/i, tone: "negative", score: 2.5 },
-  { label: "hostile", regex: /\bhostile|hateful|vengeful|violent\b/i, tone: "negative", score: 2.5 },
-  { label: "spiteful", regex: /\bspite|spiteful|vindictive\b/i, tone: "negative", score: 2.3 },
-  { label: "vindicated", regex: /\bvindicated|proved right\b/i, tone: "negative", score: 1.9 },
-  { label: "disgusted", regex: /\bdisgusted|grossed out|repulsed\b/i, tone: "negative", score: 2.1 },
   { label: "frustrated", regex: /\bfrustrated|annoyed|irritated\b/i, tone: "negative", score: 1.8 },
   { label: "sad", regex: /\bsad|low|heavy\b/i, tone: "negative", score: 1.8 },
   { label: "grieving", regex: /\bgrief|grieving|mourning|loss\b/i, tone: "negative", score: 2.4 },
   { label: "ashamed", regex: /\bashamed|embarrassed|humiliated\b/i, tone: "negative", score: 2 },
-  { label: "lonely", regex: /\blonely|alone|isolated\b/i, tone: "negative", score: 1.9 },
   { label: "numb", regex: /\bnumb|flat|blank|shut down\b/i, tone: "negative", score: 1.9 },
   { label: "drained", regex: /\bdrained|exhausted|spent|wiped\b/i, tone: "negative", score: 1.9 },
   { label: "scattered", regex: /\bscattered|all over the place|can't focus|couldn't focus\b/i, tone: "negative", score: 1.7 },
@@ -58,13 +50,9 @@ const explicitEmotionLexicon = [
   { label: "accepting", regex: /\baccepting|enough\b/i, tone: "grounded", score: 1.7 },
   { label: "calm", regex: /\bcalm|calmer\b/i, tone: "positive", score: 1.8 },
   { label: "relieved", regex: /\brelieved|lighter|eased\b/i, tone: "positive", score: 1.9 },
-  { label: "joyful", regex: /\bjoy|joyful|delighted\b/i, tone: "positive", score: 2 },
-  { label: "affectionate", regex: /\blove|loved|affection|tender toward\b/i, tone: "positive", score: 1.7 },
   { label: "hopeful", regex: /\bhopeful|optimistic|encouraged\b/i, tone: "positive", score: 1.8 },
   { label: "grateful", regex: /\bgrateful|thankful|appreciative\b/i, tone: "positive", score: 1.8 },
-  { label: "satisfied", regex: /\bsatisfied|proud|accomplished\b/i, tone: "positive", score: 1.8 },
-  { label: "empowered", regex: /\bempowered|stronger|more capable|more able\b/i, tone: "positive", score: 1.8 },
-  { label: "emotionally honest", regex: /\bhonest|truth|clearer|clarity\b/i, tone: "liminal", score: 1.7 }
+  { label: "satisfied", regex: /\bsatisfied|proud|accomplished\b/i, tone: "positive", score: 1.8 }
 ] as const;
 
 const nonliteralMarkers = [
@@ -437,20 +425,6 @@ function dedupeByLabelAndEvidence<T extends { label: string; evidence: string }>
     const parsed = JSON.parse(item) as { label: string; evidence: string };
     return items.find((candidate) => candidate.label === parsed.label && candidate.evidence === parsed.evidence)!;
   });
-}
-
-function isReactiveEmotion(label: string) {
-  return ["angry", "rageful", "hostile", "resentful", "spiteful", "vindicated", "disgusted", "alarmed", "fearful"].includes(label);
-}
-
-function getStateWeights(signals: StateSignal[]) {
-  return {
-    positive: signals.filter((signal) => signal.tone === "positive").reduce((sum, signal) => sum + signal.weight, 0),
-    grounded: signals.filter((signal) => signal.tone === "grounded").reduce((sum, signal) => sum + signal.weight, 0),
-    negative: signals.filter((signal) => signal.tone === "negative").reduce((sum, signal) => sum + signal.weight, 0),
-    liminal: signals.filter((signal) => signal.tone === "liminal").reduce((sum, signal) => sum + signal.weight, 0),
-    reactive: signals.filter((signal) => isReactiveEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0)
-  };
 }
 
 function hasRestorativeOutcome(sentence: SentenceSignal) {
@@ -1162,7 +1136,7 @@ function extractStateSignals(entry: string) {
 
   for (const sentence of sentences) {
     for (const descriptor of explicitEmotionLexicon) {
-      if (descriptor.regex.test(sentence.sentence) && !isNegatedOrQualified(sentence, descriptor.regex)) {
+      if (descriptor.regex.test(sentence.sentence)) {
         signals.push({
           label: descriptor.label,
           tone: descriptor.tone,
@@ -1199,32 +1173,6 @@ function extractStateSignals(entry: string) {
         tone: "grounded",
         evidence: sentence.sentence,
         weight: 2 * scoreSentenceStrength(sentence),
-        index: sentence.index
-      });
-    }
-
-    if (isConflict(sentence) || /(hate|wanted to hurt|wanted revenge|wanted to retaliate|destroy)/i.test(sentence.sentence)) {
-      signals.push({
-        label: /(rage|furious|enraged)/i.test(sentence.sentence)
-          ? "rageful"
-          : /(hostile|violent|hateful|vengeful|destroy)/i.test(sentence.sentence)
-            ? "hostile"
-            : /(spite|vindictive|retaliate|revenge)/i.test(sentence.sentence)
-              ? "spiteful"
-              : "angry",
-        tone: "negative",
-        evidence: sentence.sentence,
-        weight: 2.5 * scoreSentenceStrength(sentence),
-        index: sentence.index
-      });
-    }
-
-    if (/(kill myself|end my life|want to die|suicidal|suicide|hurt myself|harm myself|don't want to be here|wish i could disappear|better off without me|not wake up)/i.test(sentence.sentence)) {
-      signals.push({
-        label: "acute despair",
-        tone: "negative",
-        evidence: sentence.sentence,
-        weight: 3.2 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
@@ -1331,65 +1279,37 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
     }))
   ];
 
-  function segmentSnapshot(segment: SentenceSignal[]) {
+  function segmentLabel(segment: SentenceSignal[]) {
     const segmentSignals = signals.filter((signal) => segment.some((sentence) => sentence.index === signal.index));
     const segmentEvents = eventSignals.filter((event) => segment.some((sentence) => sentence.index === event.index));
-    const weights = getStateWeights(segmentSignals);
-    const negative = weights.negative + segmentEvents.reduce((sum, event) => sum + event.negative, 0);
-    const positive = weights.positive + segmentEvents.reduce((sum, event) => sum + event.positive, 0);
-    const grounded = weights.grounded;
-    const liminal = weights.liminal;
-    const reactive = weights.reactive;
-    const ranked = [...segmentSignals].sort((a, b) => b.weight - a.weight);
+    const liminal = segmentSignals.filter((signal) => signal.tone === "liminal").reduce((sum, signal) => sum + signal.weight, 0);
+    const grounded = segmentSignals.filter((signal) => signal.tone === "grounded").reduce((sum, signal) => sum + signal.weight, 0);
+    const negative = segmentSignals.filter((signal) => signal.tone === "negative").reduce((sum, signal) => sum + signal.weight, 0) + segmentEvents.reduce((sum, event) => sum + event.negative, 0);
+    const positive = segmentSignals.filter((signal) => signal.tone === "positive").reduce((sum, signal) => sum + signal.weight, 0) + segmentEvents.reduce((sum, event) => sum + event.positive, 0);
 
-    const label: string =
-      reactive >= Math.max(grounded + positive, negative - 0.2) && ranked.find((signal) => isReactiveEmotion(signal.label))?.label
-        ? ranked.find((signal) => isReactiveEmotion(signal.label))?.label ?? "reactive"
-        : liminal >= 1.8 && grounded >= 1.1
-          ? "unsettled but grounded"
-          : liminal >= 2.1
-            ? ranked.find((signal) => signal.label === "emotionally honest") ? "clarifying" : "transitional"
-            : grounded >= 1.8 && positive >= negative
-              ? segmentSignals.some((signal) => signal.label === "accepting")
-                ? "accepting"
-                : segmentSignals.some((signal) => signal.label === "relieved")
-                  ? "relieved"
-                  : "present"
-              : negative > positive + 0.8
-                ? ranked.find((signal) => signal.tone === "negative" || isReactiveEmotion(signal.label))?.label ?? "strained"
-                : positive > negative + 0.8
-                  ? ranked.find((signal) => signal.tone === "positive" || signal.tone === "grounded")?.label ?? "steady"
-                  : ranked[0]?.label ?? "steady";
-
-    return { label, negative, positive, grounded, liminal, reactive, ranked };
+    if (liminal >= 1.8 && grounded >= 1.1) return "unsettled but grounded";
+    if (liminal >= 2.1) return "transitional";
+    if (grounded >= 1.8 && positive >= negative) return segmentSignals.some((signal) => signal.label === "accepting") ? "accepting" : "present";
+    if (negative > positive + 0.8) return segmentSignals.filter((signal) => signal.tone === "negative").sort((a, b) => b.weight - a.weight)[0]?.label ?? "strained";
+    if (positive > negative + 0.8) return segmentSignals.filter((signal) => signal.tone === "positive" || signal.tone === "grounded").sort((a, b) => b.weight - a.weight)[0]?.label ?? "steady";
+    return segmentSignals.sort((a, b) => b.weight - a.weight)[0]?.label ?? "steady";
   }
 
-  const startSnapshot = segmentSnapshot(slices[0]);
-  const middleSnapshot = segmentSnapshot(slices[1]);
-  const endSnapshot = segmentSnapshot(slices[2]);
-  const start = startSnapshot.label;
-  const middle = middleSnapshot.label;
-  const end = endSnapshot.label;
+  const start = segmentLabel(slices[0]);
+  const middle = segmentLabel(slices[1]);
+  const end = segmentLabel(slices[2]);
   const direction: JournalAnalysis["emotional_shift"]["direction"] =
-    end === start
+    start === end
       ? middle !== start
         ? "mixed"
         : "unchanged"
-      : /(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery)/i.test(end) &&
-          !/(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery)/i.test(start) &&
-          endSnapshot.reactive < startSnapshot.reactive + 0.2
+      : /(present|steady|accepting|relieved|hopeful|transitional but steadier|unsettled but grounded)/i.test(end) && !/(present|steady|accepting|relieved|hopeful|transitional but steadier|unsettled but grounded)/i.test(start)
         ? "improved"
-        : /(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(end) &&
-            !/(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(start)
+        : /(overwhelmed|anxious|tense|angry|frustrated|drained|sad|numb|grieving|ashamed|strained)/i.test(end) && !/(overwhelmed|anxious|tense|angry|frustrated|drained|sad|numb|grieving|ashamed|strained)/i.test(start)
           ? "worsened"
           : "mixed";
 
-  const reaction =
-    middleSnapshot.reactive >= Math.max(startSnapshot.reactive, endSnapshot.reactive, 1.2)
-      ? middleSnapshot.ranked.find((signal) => isReactiveEmotion(signal.label))?.label ?? middle
-      : middle;
-
-  return { start, middle, reaction, end, direction };
+  return { start, middle, end, direction };
 }
 
 function synthesizeInterpretation(
@@ -1421,32 +1341,21 @@ function synthesizeInterpretation(
   const groundedWeight = signals.filter((signal) => signal.tone === "grounded").reduce((sum, signal) => sum + signal.weight, 0);
   const positiveWeight = signals.filter((signal) => signal.tone === "positive").reduce((sum, signal) => sum + signal.weight, 0) + supports.length * 0.8 + groundedWeight;
   const negativeWeight = signals.filter((signal) => signal.tone === "negative").reduce((sum, signal) => sum + signal.weight, 0) + stressors.length * 0.9;
-  const reactiveWeight = signals.filter((signal) => isReactiveEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0);
-  const acuteRiskWeight = signals.filter((signal) => signal.label === "acute despair").reduce((sum, signal) => sum + signal.weight, 0);
   const topSupport = supports[0];
   const topStressor = stressors[0];
-  const startState = timeline.start ?? "steady";
-  const middleState = timeline.middle ?? "steady";
-  const reactionState = timeline.reaction ?? middleState;
-  const endState = timeline.end ?? "steady";
   const centralSignals = rankedStates
     .slice(0, 4)
     .map(([label]) => label)
     .filter((label) => !["reflective", "mixed"].includes(label));
 
   let primaryEmotion = rankedStates[0]?.[0] ?? "present";
-  if (acuteRiskWeight >= 2.4) primaryEmotion = "acute despair";
-  else if (reactiveWeight >= Math.max(groundedWeight + positiveWeight, negativeWeight - 0.2)) {
-    primaryEmotion =
-      centralSignals.find((label) => ["rageful", "hostile", "spiteful", "resentful", "angry", "vindicated", "disgusted", "fearful", "alarmed"].includes(label)) ??
-      primaryEmotion;
-  } else if (liminalWeight >= 2.4 && groundedWeight >= 1.2) primaryEmotion = "unsettled but grounded";
+  if (liminalWeight >= 2.4 && groundedWeight >= 1.2) primaryEmotion = "unsettled but grounded";
   else if (liminalWeight >= 2.6 && negativeWeight < liminalWeight + 1.5) primaryEmotion = "transitional";
-  else if (groundedWeight >= 2.1 && negativeWeight <= groundedWeight + 0.6 && reactiveWeight < 1) primaryEmotion = signals.some((signal) => signal.label === "accepting") ? "accepting" : "present";
+  else if (groundedWeight >= 2.1 && negativeWeight <= groundedWeight + 0.6) primaryEmotion = signals.some((signal) => signal.label === "accepting") ? "accepting" : "present";
   else if (supports.length > 0 && stressors.length > 0 && timeline.direction === "improved") primaryEmotion = "mixed recovery";
   else if (supports.length > 0 && negativeWeight < positiveWeight) primaryEmotion = supports.some((item) => item.impact === "grounding") ? "steady" : "relieved";
   else if (stressors.length > 0 && negativeWeight > positiveWeight + 0.8) primaryEmotion = centralSignals.find((label) => !["present", "steady", "reflective"].includes(label)) ?? primaryEmotion;
-  else if (isMeaningfulDiscomfort(sentences[Math.min(1, Math.max(0, sentences.length - 1))] ?? sentences[0])) primaryEmotion = signals.some((signal) => signal.label === "emotionally honest") ? "emotional honesty" : "tender";
+  else if (isMeaningfulDiscomfort(sentences[Math.min(1, Math.max(0, sentences.length - 1))] ?? sentences[0])) primaryEmotion = "tender";
 
   const secondaryEmotions = unique(
     rankedStates
@@ -1457,18 +1366,10 @@ function synthesizeInterpretation(
   );
 
   let summary = "";
-  if (acuteRiskWeight >= 2.4) {
-    summary = "The entry carries acute despair language, and the surrounding tone stays heavy rather than calming by the end.";
-  } else if (reactiveWeight >= 2.1 && endState === reactionState) {
-    summary = `The entry intensifies into ${reactionState}, and it lands there without much sign of resolution.`;
-  } else if (reactiveWeight >= 1.8 && /(present|accepting|steady|relieved|clarifying|unsettled but grounded)/i.test(endState)) {
-    summary = `The entry moves through a sharper reactive moment and then lands in a more ${endState} place by the end.`;
-  } else if (primaryEmotion === "transitional" || primaryEmotion === "unsettled but grounded") {
+  if (primaryEmotion === "transitional" || primaryEmotion === "unsettled but grounded") {
     summary = topSupport
       ? `The entry sits in a transitional space, with uncertainty still present but ${topSupport.label} helping it land in a more grounded place.`
       : "The entry feels transitional rather than crisis-driven, holding uncertainty and awareness at the same time.";
-  } else if (reactionState !== startState && endState !== reactionState && /(present|accepting|steady|relieved|clarifying|unsettled but grounded)/i.test(endState)) {
-    summary = `The entry opens in ${startState}, moves through ${reactionState}, and lands closer to ${endState} by the end.`;
   } else if (topStressor && topSupport && timeline.direction === "improved") {
     summary = `${topStressor.label} shapes the harder part of the entry, and ${topSupport.label} becomes the clearest point of steadiness as the tone shifts by the end.`;
   } else if (topSupport && !topStressor) {
@@ -1479,7 +1380,7 @@ function synthesizeInterpretation(
   } else if (topStressor && !topSupport) {
     summary = `${topStressor.label} is the clearest source of strain here, and the entry stays more ${primaryEmotion} than relieved.`;
   } else {
-    summary = `The entry moves from ${startState} through ${middleState} and lands closer to ${endState}, with an overall tone that feels ${primaryEmotion}.`;
+    summary = `The entry moves from ${timeline.start} through ${timeline.middle} and lands closer to ${timeline.end}, with an overall tone that feels ${primaryEmotion}.`;
   }
 
   const sentimentScore = clamp(Number(((positiveWeight - negativeWeight) / 6).toFixed(2)), -1, 1);
@@ -1499,8 +1400,7 @@ function synthesizeInterpretation(
     liminalWeight >= 2.4 ? "transition" : null,
     groundedWeight >= 1.8 ? "presence" : null,
     signals.some((signal) => signal.label === "accepting") ? "acceptance" : null,
-    isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null,
-    reactiveWeight >= 1.8 ? "reactivity" : null
+    isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null
   ]).slice(0, 5);
 
   const themes = unique([
@@ -1514,8 +1414,7 @@ function synthesizeInterpretation(
     signals.some((signal) => signal.label === "accepting") ? "acceptance" : null,
     signals.some((signal) => signal.label === "present") ? "presence" : null,
     isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null,
-    signals.some((signal) => signal.label === "mixed recovery") ? "emerging clarity" : null,
-    reactiveWeight >= 1.8 ? "reactive strain" : null
+    signals.some((signal) => signal.label === "mixed recovery") ? "emerging clarity" : null
   ]).slice(0, 6);
 
   return {
@@ -1546,8 +1445,8 @@ function synthesizeInterpretation(
     energyLevel,
     energyDirection,
     emotionalShift: {
-      start_state: startState,
-      end_state: endState,
+      start_state: timeline.start,
+      end_state: timeline.end,
       direction: timeline.direction
     },
     themes,
@@ -1590,7 +1489,7 @@ function synthesizeInterpretation(
       findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null,
       ...sentences.slice(0, 2).map((sentence) => sentence.sentence)
     ]).slice(0, 4),
-    reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null, timeline.reaction !== timeline.start ? `reaction: ${timeline.reaction}` : null]).slice(0, 6),
+    reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null]).slice(0, 6),
     confidence: {
       primary_emotion: rankedStates.length > 0 ? 0.86 : 0.5,
       triggers: stressors.length > 0 ? 0.82 : 0.42,
