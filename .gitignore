@@ -3,3 +3,5 @@ node_modules
 *.log
 .env.local
 tsconfig.tsbuildinfo
+.DS_Store
+.env
