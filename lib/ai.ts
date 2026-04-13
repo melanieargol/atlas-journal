@@ -258,6 +258,13 @@ type StateSignal = {
   index: number;
 };
 
+type SignalScore = {
+  intensity: number;
+  repetition: number;
+  position: number;
+  emphasis: number;
+};
+
 type UserCheckIns = {
   user_mood?: number | null;
   user_stress?: number | null;
@@ -444,6 +451,7 @@ function normalizeSupportLabel(label: string, evidence: string, category: string
   if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence) && /\b(home|kitchen)\b/i.test(evidence)) return "food at home";
   if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence)) return "meal";
   if (/\b(coffee|tea)\b/i.test(evidence) && /(slow|quiet|didn't rush|did not rush|took my time|sat with)/i.test(evidence)) return "small ritual";
+  if (/\bdog\b/i.test(evidence) && /(calm|comfort|steady|present|better|grounded)/i.test(evidence)) return "dog presence";
   if (category === "connection") return "social connection";
   if (category === "movement") return "movement";
   if (category === "accomplishment") return "finished task";
@@ -650,11 +658,12 @@ function hasInternalShiftLanguage(text: string) {
 }
 
 function scoreNotablePhrase(sentence: string) {
-  let score = 1;
-  if (/[\"']/.test(sentence)) score += 0.5;
-  if (/(felt|realized|noticed|clearer|enough|present|wrong|unsafe|worried|angry|relieved|steady|truth|honest)/i.test(sentence)) score += 0.8;
-  if (sentence.length >= 48) score += 0.3;
-  return score;
+  const emotionalWeight = /(felt|realized|noticed|clearer|enough|present|wrong|unsafe|worried|angry|relieved|steady|truth|honest|scared|calmer)/i.test(sentence) ? 2 : 1;
+  const uniqueness = /["']|in between|maybe that's enough|felt more present|truth|quiet|watching|unsafe|wrong/i.test(sentence) ? 2 : 1;
+  const thematicRelevance = /(felt|realized|noticed|because|enough|clearer|present|steady|unsafe|worried|angry|relieved)/i.test(sentence) ? 2 : 1;
+  const placementImportance = sentence.length >= 48 ? 2 : 1;
+
+  return emotionalWeight * 0.4 + uniqueness * 0.2 + thematicRelevance * 0.2 + placementImportance * 0.2;
 }
 
 function isSafetySensitiveText(text: string) {
@@ -727,13 +736,13 @@ function applySafetySensitiveSuppression(
   if (safetyAssessment.level === "moderate") {
     return {
       ...interpretation,
-      personalKeywords: sanitizeList(interpretation.personalKeywords).slice(0, 4),
-      notablePhrases: sanitizeList(interpretation.notablePhrases).filter((item) => !isSafetySensitiveText(item)).slice(0, 2),
+      summary:
+        "This entry sounds heavy, so Atlas Journal is keeping the interpretation gentler and more restrained while support stays in view.",
+      personalKeywords: [],
+      notablePhrases: [],
       themes: interpretation.themes.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
-      recurringTopics: interpretation.recurringTopics.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
-      customEmotionTerms: sanitizeList(interpretation.customEmotionTerms)
-        .map((item) => (isSafetySensitiveText(item) ? abstractSafetySensitiveText(item) : item))
-        .slice(0, 3),
+      recurringTopics: interpretation.recurringTopics.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 2),
+      customEmotionTerms: [],
       evidenceSpans: interpretation.evidenceSpans.filter((item) => item.type === "safety" || !isSafetySensitiveText(item.text)).slice(0, 4)
     };
   }
@@ -789,11 +798,13 @@ function applySafetySensitiveSuppressionToAnalysis(analysis: JournalAnalysis): J
   if (safetyLevel === "moderate") {
     return validateAnalysis({
       ...analysis,
-      personal_keywords: sanitizeList(analysis.personal_keywords).slice(0, 4),
-      notable_phrases: sanitizeList(analysis.notable_phrases).filter((item) => !isSafetySensitiveText(item)).slice(0, 2),
+      summary:
+        "This entry sounds heavy, so Atlas Journal is keeping the interpretation gentler and more restrained while support stays in view.",
+      personal_keywords: [],
+      notable_phrases: [],
       themes: analysis.themes.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
-      recurring_topics: analysis.recurring_topics.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
-      custom_emotion_terms: sanitizeList(analysis.custom_emotion_terms).slice(0, 3),
+      recurring_topics: analysis.recurring_topics.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 2),
+      custom_emotion_terms: [],
       evidence_spans: analysis.evidence_spans.filter((item) => item.type === "safety" || !isSafetySensitiveText(item.text)).slice(0, 4)
     });
   }
@@ -897,6 +908,10 @@ function isEvidenceLabelMatch(label: string, evidence: string) {
 
   if (normalizedLabel === "small ritual") {
     return /(coffee|tea|meal|breakfast|lunch|dinner).*(slow|quiet|didn't rush|did not rush|took my time)|made coffee slowly/i.test(evidence);
+  }
+
+  if (normalizedLabel === "dog presence") {
+    return /\bdog\b/i.test(evidence) && /(calm|comfort|steady|present|better|grounded)/i.test(evidence);
   }
 
   if (normalizedLabel === "time with friends") {
@@ -1007,6 +1022,53 @@ function hasDisruptionSignal(sentence: SentenceSignal) {
 function scoreSentenceStrength(sentence: SentenceSignal) {
   const base = sentence.positionWeight * sentence.emotionalWeight;
   return sentence.centralCue ? base * 1.1 : base;
+}
+
+function getSignalScore(signal: StateSignal, sentences: SentenceSignal[], allSignals: StateSignal[]): SignalScore {
+  const sentence = sentences.find((item) => item.index === signal.index);
+  const sameLabelCount = allSignals.filter((item) => item.label === signal.label).length;
+  const sentenceCount = Math.max(sentences.length - 1, 1);
+  const intensity = clamp(signal.weight / 2.4, 0.4, 3);
+  const repetition = clamp(sameLabelCount, 1, 4);
+  const position = clamp(((signal.index ?? 0) / sentenceCount) * 3, 0.8, 3);
+  const emphasis = clamp(
+    (sentence?.centralCue ? 1.2 : 0.7) +
+      (/[!?]/.test(signal.evidence) ? 0.7 : 0) +
+      (sentence?.restorativeCue ? 0.4 : 0) +
+      (sentence?.conflict ? 0.5 : 0),
+    0.6,
+    3
+  );
+
+  return { intensity, repetition, position, emphasis };
+}
+
+function getDominanceScore(score: SignalScore) {
+  return Number((score.intensity * 0.4 + score.repetition * 0.2 + score.position * 0.25 + score.emphasis * 0.15).toFixed(3));
+}
+
+function getDominantSignal(signals: StateSignal[], sentences: SentenceSignal[]) {
+  const ranked = signals
+    .map((signal) => ({
+      signal,
+      score: getDominanceScore(getSignalScore(signal, sentences, signals))
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0] ?? null;
+}
+
+function allowsDualValence(sentence: SentenceSignal) {
+  return (
+    (hasRestorativeOutcome(sentence) || hasGentleRegulation(sentence) || hasPositiveExperience(sentence)) &&
+    (indicatesActualStrain(sentence) || hasDisruptionSignal(sentence) || isConflict(sentence))
+  );
+}
+
+function quoteSupportingEvidence(text: string, maxChars = 120) {
+  const snippet = text.trim().replace(/\s+/g, " ");
+  const clipped = snippet.length > maxChars ? `${snippet.slice(0, maxChars - 1).trim()}...` : snippet;
+  return `"${clipped}"`;
 }
 
 function getCentralSentences(sentences: SentenceSignal[]) {
@@ -1360,6 +1422,24 @@ function getSupportCandidate(sentence: SentenceSignal): JournalAnalysis["support
       category: "comfort",
       evidence: sentenceText,
       impact: classifySupportImpact(sentence) === "mixed" ? "helpful" : classifySupportImpact(sentence)
+    };
+  }
+
+  if (/\bdog\b/i.test(sentenceText) && /(calm|calmer|steady|steadier|comfort|comforting|soft|grounded|present|better)/i.test(sentenceText) && !hasNegativeContext(sentence)) {
+    return {
+      label: "dog presence",
+      category: "comfort",
+      evidence: sentenceText,
+      impact: "grounding"
+    };
+  }
+
+  if (/(made|brewed|prepared).*(coffee|tea)|(coffee|tea).*(didn't rush|did not rush|slowly|quietly|took my time)/i.test(sentenceText) && !hasNegativeContext(sentence)) {
+    return {
+      label: "small stabilizing ritual",
+      category: "routine",
+      evidence: sentenceText,
+      impact: "grounding"
     };
   }
 
@@ -1882,7 +1962,14 @@ function extractStateSignals(entry: string) {
 function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof extractEvents>, stateResult: ReturnType<typeof extractStateSignals>) {
   const detectedSupports = eventsResult.events.filter((event) => event.kind === "support");
   const eligibleSupports = detectedSupports
-    .filter((event) => !eventsResult.events.some((other) => other.kind === "stressor" && other.evidence === event.evidence && other.weight >= event.weight))
+    .filter((event) => {
+      const sentence = eventsResult.sentences[event.index];
+      return sentence
+        ? !eventsResult.events.some(
+            (other) => other.kind === "stressor" && other.evidence === event.evidence && other.weight >= event.weight && !allowsDualValence(sentence)
+          )
+        : true;
+    })
     .filter((event) => {
       const sentence = eventsResult.sentences[event.index];
       return sentence ? isEligibleSupportCandidate(event, sentence) : false;
@@ -1955,7 +2042,14 @@ function detectStressors(_entry: string, eventsResult: ReturnType<typeof extract
       const sentence = eventsResult.sentences[event.index];
       return sentence ? isEligibleStressorCandidate(event, sentence) : false;
     })
-    .filter((event) => !eventsResult.events.some((other) => other.kind === "support" && other.evidence === event.evidence && other.weight >= event.weight))
+    .filter((event) => {
+      const sentence = eventsResult.sentences[event.index];
+      return sentence
+        ? !eventsResult.events.some(
+            (other) => other.kind === "support" && other.evidence === event.evidence && other.weight >= event.weight && !allowsDualValence(sentence)
+          )
+        : true;
+    })
     .sort((a, b) => b.weight - a.weight)
     .map((event) => ({
       label: normalizeStressorLabel(event.label, event.evidence, event.category),
@@ -1994,6 +2088,10 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const { sentences, signals } = stateResult;
   const third = Math.max(1, Math.ceil(sentences.length / 3));
   const slices = [sentences.slice(0, third), sentences.slice(third, third * 2), sentences.slice(third * 2)].map((slice) => (slice.length > 0 ? slice : sentences));
+  const beforeCount = Math.max(1, Math.ceil(sentences.length * 0.3));
+  const afterStart = Math.max(0, Math.floor(sentences.length * 0.6));
+  const beforeSlice = sentences.slice(0, beforeCount);
+  const afterSlice = sentences.slice(afterStart);
   const eventSignals: EventSignal[] = [
     ...supports.map((item) => ({
       label: item.label,
@@ -2058,6 +2156,10 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const middleSnapshot = segmentSnapshot(slices[1]);
   const endSnapshot = segmentSnapshot(slices[2]);
   const arcStrength = startSnapshot.totalStrength + middleSnapshot.totalStrength + endSnapshot.totalStrength;
+  const beforeSignals = signals.filter((signal) => beforeSlice.some((sentence) => sentence.index === signal.index));
+  const afterSignals = signals.filter((signal) => afterSlice.some((sentence) => sentence.index === signal.index));
+  const dominantBefore = getDominantSignal(beforeSignals, beforeSlice.length > 0 ? beforeSlice : sentences);
+  const dominantAfter = getDominantSignal(afterSignals, afterSlice.length > 0 ? afterSlice : sentences);
   const lowSignalArc =
     sentences.length <= 2 ||
     arcStrength < 4.8 ||
@@ -2084,12 +2186,27 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const start = startSnapshot.label;
   const middle = middleSnapshot.label;
   const end = endSnapshot.label;
+  const before = dominantBefore?.signal.label ?? start;
+  const after = dominantAfter?.signal.label ?? end;
+  const beforeScore = dominantBefore?.score ?? 0;
+  const afterScore = dominantAfter?.score ?? 0;
   const groundingEnd =
     /(present|accepting|steady|relieved|clarifying|unsettled but grounded|mixed recovery|grounded)/i.test(end) ||
     endSnapshot.grounded >= Math.max(endSnapshot.negative - 0.15, 1.4);
   const reactiveMiddle = middleSnapshot.reactive >= Math.max(startSnapshot.reactive, endSnapshot.reactive, 1.2);
+  const scoreDelta = Number((afterScore - beforeScore).toFixed(2));
   const direction: JournalAnalysis["emotional_shift"]["direction"] =
-    end === start
+    Math.abs(scoreDelta) < 0.2 && after === before
+      ? "unchanged"
+      : reactiveMiddle && groundingEnd
+        ? "improved"
+      : after === before && middle !== start
+        ? "mixed"
+      : scoreDelta > 0.45 && after !== before
+        ? "improved"
+      : scoreDelta < -0.45 && after !== before
+        ? "worsened"
+      : end === start
       ? middle !== start
         ? "mixed"
         : "unchanged"
@@ -2122,7 +2239,7 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
               ? ("mixed-but-stable" as const)
               : ("subtle-shift" as const);
 
-  return { start, middle, reaction, end, direction, arcMode, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
+  return { start: before, middle, reaction, end: after, direction, arcMode, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
 }
 
 function synthesizeInterpretation(
@@ -2137,6 +2254,7 @@ function synthesizeInterpretation(
   const { sentences, signals } = stateResult;
   const { supports, copingActions, restorativeSignals } = supportsResult;
   const { stressors, triggers } = stressorsResult;
+  const dominantOverall = getDominantSignal(signals, sentences);
   const rankedStates = getRankedEmotions(
     new Map(
       signals.reduce<Array<[string, number]>>((accumulator, signal) => {
@@ -2170,7 +2288,7 @@ function synthesizeInterpretation(
     .map(([label]) => label)
     .filter((label) => !["reflective", "mixed"].includes(label));
 
-  let primaryEmotion = rankedStates[0]?.[0] ?? "present";
+  let primaryEmotion = dominantOverall?.signal.label ?? rankedStates[0]?.[0] ?? "present";
   if (acuteRiskWeight >= 2.4) primaryEmotion = "acute despair";
   else if (reactiveWeight >= Math.max(groundedWeight + positiveWeight, negativeWeight - 0.2)) {
     primaryEmotion =
@@ -2327,9 +2445,8 @@ function synthesizeInterpretation(
 
   const notablePhrases = unique([
     ...getCentralSentences(sentences)
-      .map((sentence) => sentence.sentence)
-      .filter(isNotablePhraseCandidate)
-      .map((sentence) => ({ sentence, score: scoreNotablePhrase(sentence) }))
+      .filter((sentence) => isNotablePhraseCandidate(sentence.sentence))
+      .map((sentence) => ({ sentence: sentence.sentence, score: scoreNotablePhrase(sentence.sentence) + scoreSentenceStrength(sentence) * 0.35 }))
       .sort((a, b) => b.score - a.score)
       .filter((item) => item.score >= 1.7)
       .slice(0, 2)
@@ -2407,17 +2524,17 @@ function synthesizeInterpretation(
       ...stressors
         .slice(0, 2)
         .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
-        .map((item) => JSON.stringify({ text: item.evidence, type: "stressor" as const, label: normalizePromotedConcept(item.label, item.evidence, "stressor") })),
+        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "stressor" as const, label: normalizePromotedConcept(item.label, item.evidence, "stressor") })),
       ...supports
         .slice(0, 2)
         .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
-        .map((item) => JSON.stringify({ text: item.evidence, type: "support" as const, label: normalizePromotedConcept(item.label, item.evidence, "support") })),
+        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "support" as const, label: normalizePromotedConcept(item.label, item.evidence, "support") })),
       ...signals
         .filter((item) => ["negative", "grounded", "liminal"].includes(item.tone))
         .filter((item) => !isWeakEntityLabel(item.label))
         .slice(0, 2)
-        .map((item) => JSON.stringify({ text: item.evidence, type: "emotion" as const, label: normalizeConceptLabel(item.label) })),
-      ...recurringTopics.slice(0, 1).map((item) => JSON.stringify({ text: item, type: "topic" as const, label: item }))
+        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "emotion" as const, label: normalizeConceptLabel(item.label) })),
+      ...recurringTopics.slice(0, 1).map((item) => JSON.stringify({ text: quoteSupportingEvidence(item), type: "topic" as const, label: item }))
     ]).map((item) => JSON.parse(item) as JournalAnalysis["evidence_spans"][number]),
     notablePhrases,
     reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null, timeline.reaction !== timeline.start ? `reaction: ${timeline.reaction}` : null]).slice(0, 6),
