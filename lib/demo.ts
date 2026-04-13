@@ -3,9 +3,11 @@ import { buildReminderSnapshot } from "@/lib/nudges";
 import { journalDatabaseSchema } from "@/lib/schema";
 import type {
   ArchiveListItem,
+  EntryPatternContext,
   EmotionTrendDatum,
   EnergyPatternDatum,
   JournalRecord,
+  PatternContextItem,
   RepeatedSignal,
   RestorativeInsight,
   TimeRange,
@@ -170,6 +172,140 @@ function buildRestorativeInsights(entries: JournalRecord[]): RestorativeInsight[
   return insights;
 }
 
+function collectPatternSignals(entry: JournalRecord) {
+  return [
+    ...entry.analysis.stressors.map((item) => ({
+      label: item.label,
+      kind: "stressor" as const,
+      tone: "stress" as const
+    })),
+    ...entry.analysis.supports.map((item) => ({
+      label: item.label,
+      kind: "support" as const,
+      tone: "support" as const
+    })),
+    ...entry.analysis.coping_actions.map((item) => ({
+      label: item.action,
+      kind: "coping" as const,
+      tone: item.impact === "helpful" ? ("support" as const) : ("topic" as const)
+    })),
+    ...entry.analysis.restorative_signals.map((item) => ({
+      label: item,
+      kind: "restorative" as const,
+      tone: "restorative" as const
+    })),
+    ...entry.analysis.themes.map((item) => ({
+      label: item,
+      kind: "theme" as const,
+      tone: "topic" as const
+    })),
+    ...entry.analysis.personal_keywords.map((item) => ({
+      label: item,
+      kind: "keyword" as const,
+      tone: "topic" as const
+    }))
+  ];
+}
+
+function buildEntryPatternContext(entry: JournalRecord, allEntries: JournalRecord[]): EntryPatternContext {
+  const currentLabels = new Set(collectPatternSignals(entry).map((item) => item.label.toLowerCase()));
+  const otherEntries = allEntries.filter((candidate) => candidate.id !== entry.id);
+  const now = new Date(`${entry.entry_date}T00:00:00`);
+  const cutoffs = {
+    d7: subtractDays(now, 7),
+    d30: subtractDays(now, 30),
+    d90: subtractDays(now, 90)
+  };
+
+  const aggregate = new Map<
+    string,
+    {
+      label: string;
+      kindCounts: Record<PatternContextItem["kind"], number>;
+      toneCounts: Record<PatternContextItem["tone"], number>;
+      d7: number;
+      d30: number;
+      d90: number;
+    }
+  >();
+
+  for (const candidate of otherEntries) {
+    const candidateDate = new Date(`${candidate.entry_date}T00:00:00`);
+
+    for (const signal of collectPatternSignals(candidate)) {
+      if (!currentLabels.has(signal.label.toLowerCase())) {
+        continue;
+      }
+
+      const key = signal.label.toLowerCase();
+      const existing =
+        aggregate.get(key) ??
+        {
+          label: signal.label,
+          kindCounts: { theme: 0, keyword: 0, stressor: 0, support: 0, coping: 0, restorative: 0 },
+          toneCounts: { stress: 0, support: 0, mixed: 0, topic: 0, restorative: 0 },
+          d7: 0,
+          d30: 0,
+          d90: 0
+        };
+
+      existing.kindCounts[signal.kind] += 1;
+      existing.toneCounts[signal.tone] += 1;
+      if (candidateDate >= cutoffs.d7) existing.d7 += 1;
+      if (candidateDate >= cutoffs.d30) existing.d30 += 1;
+      if (candidateDate >= cutoffs.d90) existing.d90 += 1;
+
+      aggregate.set(key, existing);
+    }
+  }
+
+  const items: PatternContextItem[] = Array.from(aggregate.values())
+    .map((item) => {
+      const kinds = Object.entries(item.kindCounts).sort((a, b) => b[1] - a[1]);
+      const tones = Object.entries(item.toneCounts).sort((a, b) => b[1] - a[1]);
+      const topKind = (kinds[0]?.[0] as PatternContextItem["kind"]) ?? "theme";
+      const topTone = (tones[0]?.[0] as PatternContextItem["tone"]) ?? "topic";
+      const hasStressAndSupport = item.toneCounts.stress > 0 && item.toneCounts.support > 0;
+
+      return {
+        label: item.label,
+        kind: topKind,
+        tone: hasStressAndSupport ? ("mixed" as const) : topTone,
+        tier:
+          hasStressAndSupport
+            ? ("mixed" as const)
+            : item.d30 >= 4 || item.d90 >= 6
+              ? ("established" as const)
+              : item.d7 >= 2 || item.d30 >= 2
+                ? ("active" as const)
+                : ("emerging" as const),
+        relation:
+          hasStressAndSupport
+            ? ("mixed role" as const)
+            : item.d7 > 0 && item.d30 <= 1 && item.d90 >= 3
+              ? ("shifting" as const)
+              : ("stable" as const),
+        counts: {
+          d7: item.d7,
+          d30: item.d30,
+          d90: item.d90
+        }
+      };
+    })
+    .filter((item) => item.counts.d90 >= 2)
+    .sort((a, b) => b.counts.d30 - a.counts.d30 || b.counts.d90 - a.counts.d90 || a.label.localeCompare(b.label))
+    .slice(0, 6);
+
+  return {
+    items,
+    windows: {
+      short: "7d",
+      main: "30d",
+      long: "90d"
+    }
+  };
+}
+
 function buildArchiveItems(entries: JournalRecord[]): ArchiveListItem[] {
   return entries.map((entry) => ({
     id: entry.id,
@@ -178,6 +314,17 @@ function buildArchiveItems(entries: JournalRecord[]): ArchiveListItem[] {
     preview: entry.analysis.raw_text.slice(0, 160).trim(),
     primary_emotion: entry.analysis.primary_emotion,
     themes: entry.analysis.themes,
+    tags: Array.from(new Set([...entry.analysis.themes, ...entry.analysis.reflection_tags])),
+    search_terms: Array.from(
+      new Set([
+        ...entry.analysis.themes,
+        ...entry.analysis.reflection_tags,
+        ...entry.analysis.recurring_topics,
+        ...entry.analysis.personal_keywords,
+        ...entry.analysis.supports.map((item) => item.label),
+        ...entry.analysis.stressors.map((item) => item.label)
+      ])
+    ),
     energy_direction: entry.analysis.energy_direction
   }));
 }
@@ -228,6 +375,20 @@ export async function getDemoEntries() {
 export async function getDemoEntryById(id: string) {
   const entries = await getDemoEntries();
   return entries.find((entry) => entry.id === id) ?? null;
+}
+
+export async function getDemoEntryWithPatternContext(id: string) {
+  const entries = await getDemoEntries();
+  const entry = entries.find((item) => item.id === id) ?? null;
+
+  if (!entry) {
+    return null;
+  }
+
+  return {
+    entry,
+    patternContext: buildEntryPatternContext(entry, entries)
+  };
 }
 
 export async function getDemoArchiveEntries() {

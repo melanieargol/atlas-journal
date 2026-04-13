@@ -5,8 +5,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { CheckInFields, type CheckInValues } from "@/components/CheckInFields";
+import { PatternContextPanel } from "@/components/PatternContextPanel";
 import { ResultsCard } from "@/components/ResultsCard";
-import type { JournalRecord } from "@/types/journal";
+import type { EntryPatternContext, JournalRecord } from "@/types/journal";
 
 
 function formatDate(date: string) {
@@ -17,7 +18,15 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T00:00:00`));
 }
 
-export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: JournalRecord; readOnly?: boolean }) {
+export function ArchiveEntryDetail({
+  entry,
+  patternContext,
+  readOnly = false
+}: {
+  entry: JournalRecord;
+  patternContext?: EntryPatternContext;
+  readOnly?: boolean;
+}) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -239,7 +248,8 @@ export function ArchiveEntryDetail({ entry, readOnly = false }: { entry: Journal
       ) : null}
 
       <div className="reveal-panel">
-        <ResultsCard analysis={currentEntry.analysis} />
+        {patternContext ? <PatternContextPanel context={patternContext} basePath={readOnly ? "/demo/archive" : "/archive"} /> : null}
+        <ResultsCard analysis={currentEntry.analysis} archiveBasePath={readOnly ? "/demo/archive" : "/archive"} />
       </div>
     </div>
   );

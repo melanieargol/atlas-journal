@@ -8,8 +8,13 @@ export const metadata: Metadata = {
   title: "Atlas Journal | Demo Archive"
 };
 
-export default async function DemoArchivePage() {
+export default async function DemoArchivePage({
+  searchParams
+}: {
+  searchParams?: Promise<{ q?: string; theme?: string; emotion?: string }>;
+}) {
   const entries = await getDemoArchiveEntries();
+  const params = searchParams ? await searchParams : undefined;
 
   return (
     <AppFrame
@@ -34,7 +39,13 @@ export default async function DemoArchivePage() {
         </article>
       </section>
 
-      <ArchiveEntryList entries={entries} basePath="/demo/archive" />
+      <ArchiveEntryList
+        entries={entries}
+        basePath="/demo/archive"
+        initialSearch={params?.q ?? ""}
+        initialTheme={params?.theme ?? "all"}
+        initialEmotion={params?.emotion ?? "all"}
+      />
     </AppFrame>
   );
 }

@@ -608,6 +608,32 @@ select {
   font-size: clamp(1.4rem, 3vw, 2rem);
 }
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.section-title-row .section-label {
+  margin-bottom: 0;
+}
+
+.section-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(174, 182, 217, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: help;
+}
+
 .compact-head {
   margin-bottom: 14px;
 }
@@ -722,6 +748,16 @@ select {
   color: var(--muted-strong);
 }
 
+.tag-link {
+  text-decoration: none;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.tag-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(242, 168, 75, 0.28);
+}
+
 .filter-row {
   display: flex;
   gap: 10px;
@@ -825,6 +861,15 @@ select {
   background: linear-gradient(180deg, rgba(125, 178, 255, 0.08), rgba(16, 23, 38, 0.88));
 }
 
+.signal-pill-mixed {
+  background: linear-gradient(180deg, rgba(185, 152, 255, 0.1), rgba(16, 23, 38, 0.88));
+}
+
+.signal-pill-link {
+  text-decoration: none;
+  color: inherit;
+}
+
 .support-banner {
   margin-bottom: 20px;
   padding: 24px;
@@ -839,6 +884,22 @@ select {
 
 .support-banner-high {
   border-color: rgba(255, 126, 168, 0.34);
+}
+
+.support-banner-low {
+  border-color: rgba(245, 176, 76, 0.26);
+  background:
+    radial-gradient(circle at top left, rgba(245, 176, 76, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    rgba(24, 20, 15, 0.92);
+}
+
+.safety-veil {
+  margin-bottom: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 126, 168, 0.12), rgba(245, 176, 76, 0.12), rgba(255, 126, 168, 0.12));
+  animation: pulse-soft 1.6s ease-in-out infinite;
 }
 
 .support-banner-copy,
@@ -1664,6 +1725,19 @@ select {
 
   100% {
     box-shadow: 0 0 0 0 rgba(93, 210, 193, 0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scaleX(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scaleX(1.01);
   }
 }
 

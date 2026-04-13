@@ -35,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const nextAnalysis = input.reanalyze
       ? validateAnalysis({
-          ...(await analyzeEntry(input.raw_text)).analysis,
+          ...(await analyzeEntry(input.raw_text, mergedCheckIns)).analysis,
           raw_text: input.raw_text,
           ...mergedCheckIns
         })

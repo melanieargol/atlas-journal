@@ -43,6 +43,12 @@ const explicitEmotionLexicon = [
   { label: "vindicated", regex: /\bvindicated|proved right\b/i, tone: "negative", score: 1.9 },
   { label: "disgusted", regex: /\bdisgusted|grossed out|repulsed\b/i, tone: "negative", score: 2.1 },
   { label: "frustrated", regex: /\bfrustrated|annoyed|irritated\b/i, tone: "negative", score: 1.8 },
+  { label: "concerned", regex: /\bconcerned|worried|worrying\b/i, tone: "negative", score: 1.9 },
+  { label: "suspicious", regex: /\bsuspicious|don't trust|do not trust|something felt off\b/i, tone: "negative", score: 2 },
+  { label: "watchful", regex: /\bwatchful|keeping an eye|on guard\b/i, tone: "liminal", score: 1.8 },
+  { label: "vigilant", regex: /\bvigilant|hypervigilant|alert\b/i, tone: "negative", score: 2 },
+  { label: "curious", regex: /\bcurious|wondering|trying to understand|trying to figure out\b/i, tone: "liminal", score: 1.6 },
+  { label: "investigative", regex: /\binvestigat|looking into|trying to find out|waiting for information\b/i, tone: "liminal", score: 1.8 },
   { label: "sad", regex: /\bsad|low|heavy\b/i, tone: "negative", score: 1.8 },
   { label: "grieving", regex: /\bgrief|grieving|mourning|loss\b/i, tone: "negative", score: 2.4 },
   { label: "ashamed", regex: /\bashamed|embarrassed|humiliated\b/i, tone: "negative", score: 2 },
@@ -252,6 +258,12 @@ type StateSignal = {
   index: number;
 };
 
+type UserCheckIns = {
+  user_mood?: number | null;
+  user_stress?: number | null;
+  user_energy?: number | null;
+};
+
 function includesAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
 }
@@ -374,6 +386,172 @@ function isMeaningfulDiscomfort(sentence: SentenceSignal) {
   );
 }
 
+function isWeakEntityLabel(label: string) {
+  return /^(mike|sister|brother|mom|dad|parent|family|manager|friend|partner|wife|husband|boyfriend|girlfriend|coffee|tea|alarm|pressure|wrong)$/.test(
+    label.trim().toLowerCase()
+  );
+}
+
+function isWatchfulEmotion(label: string) {
+  return ["concerned", "suspicious", "watchful", "vigilant", "curious", "investigative", "alarmed", "fearful", "uneasy", "unsettled"].includes(
+    label
+  );
+}
+
+function hasConcernContext(text: string) {
+  return /(checking|watching|waiting|trying to find out|trying to understand|trying to figure out|keeping an eye|felt off|something felt off|not sure|unsure|concerned|worried|suspicious|don't trust|do not trust|alert)/i.test(
+    text
+  );
+}
+
+function normalizePromotedConcept(label: string, evidence: string, bucket: "stressor" | "topic" | "keyword" | "support") {
+  const normalizedLabel = normalizeConceptLabel(label);
+  const normalizedEvidence = evidence.toLowerCase();
+
+  if (bucket !== "support") {
+    if (/\b(mike|friend|partner|wife|husband|boyfriend|girlfriend)\b/i.test(evidence)) {
+      if (/(argued|fight|hostile|insult|yelled|screamed|threat)/i.test(evidence)) return "relationship conflict";
+      if (hasConcernContext(normalizedEvidence)) return "relationship concern";
+    }
+
+    if (/\b(sister|brother|mom|dad|parent|family)\b/i.test(evidence)) {
+      if (/(argued|fight|hostile|yelled|threat)/i.test(evidence)) return "family strain";
+      if (hasConcernContext(normalizedEvidence)) return "family concern";
+    }
+
+    if (/\bmanager\b/i.test(evidence)) return "work pressure";
+    if (/\balarm\b/i.test(evidence) && !isWeakEntityLabel(normalizedLabel)) return "alarm";
+  }
+
+  if (bucket === "topic") {
+    if (/(trying to find out|waiting for information|looking into|investigat)/i.test(evidence)) return "investigation";
+    if (/(concerned|worried|keeping an eye|watchful|vigilant|alert)/i.test(evidence)) return "watchfulness";
+  }
+
+  return normalizedLabel;
+}
+
+function isEligibleStressorCandidate(event: EventSignal, sentence: SentenceSignal) {
+  if (event.kind !== "stressor") return false;
+  if (isWeakEntityLabel(event.label)) return false;
+  if (isNegatedOrQualified(sentence, new RegExp(`\\b${event.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"))) return false;
+  if (isMeaningfulDiscomfort(sentence) && !indicatesActualStrain(sentence)) return false;
+  if (!indicatesActualStrain(sentence) && !/(went wrong|unsafe|scared|afraid|pressure|burden|heavy|too much|overload|fight|argued|threat|hostile|hurt|pain|missed|car trouble|flat tire|refund call)/i.test(sentence.sentence)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isEligibleSupportCandidate(event: EventSignal, sentence: SentenceSignal) {
+  if (event.kind !== "support") return false;
+  if (isConflict(sentence) || hasNegativeContext(sentence)) return false;
+  if (!isEvidenceLabelMatch(event.label, event.evidence) && !hasGentleRegulation(sentence) && !sentence.restorativeCue) return false;
+  return true;
+}
+
+function isEligiblePersonalKeyword(label: string, evidence: string) {
+  const normalized = label.trim().toLowerCase();
+  if (normalized.length < 4 || isWeakEntityLabel(normalized)) return false;
+  if (!/[a-z]/i.test(normalized)) return false;
+  if (/^(present|steady|transition|acceptance|movement|connection|resolution|pressure|disruption|conflict)$/.test(normalized)) return false;
+  if (normalized.split(/\s+/).length === 1 && !/(call|walk|coffee|home|money|sleep|truth|clarity|rush|present|enough)/i.test(normalized) && !evidence.toLowerCase().includes(normalized)) {
+    return false;
+  }
+
+  return true;
+}
+
+function shouldPromoteTopicCandidate(label: string, evidence: string) {
+  const concept = normalizePromotedConcept(label, evidence, "topic");
+  if (!shouldPromoteTopic(concept)) return false;
+  if (isWeakEntityLabel(concept)) return false;
+  if (/(present|acceptance|transition|watchfulness|investigation|emotional honesty|self-regulation|connection|movement|money stress|work pressure|physical strain|relationship conflict|family concern|family strain)/i.test(concept)) {
+    return true;
+  }
+
+  return concept.split(/\s+/).length > 1;
+}
+
+function getCheckInInterpretationProfile(checkIns?: UserCheckIns) {
+  const mood = checkIns?.user_mood ?? null;
+  const stress = checkIns?.user_stress ?? null;
+  const energy = checkIns?.user_energy ?? null;
+
+  return {
+    mood,
+    stress,
+    energy,
+    highMood: mood !== null && mood >= 8,
+    lowMood: mood !== null && mood <= 3,
+    highStress: stress !== null && stress >= 8,
+    extremeStress: stress !== null && stress >= 10,
+    lowStress: stress !== null && stress <= 3,
+    highEnergy: energy !== null && energy >= 8,
+    lowEnergy: energy !== null && energy <= 3
+  };
+}
+
+function describeCopingAction(label: string, evidence: string, category: string) {
+  const normalizedEvidence = evidence.toLowerCase();
+
+  if (category === "presence" || /didn't rush|did not rush|slowed down|took my time/i.test(evidence)) {
+    return "slowed down on purpose";
+  }
+
+  if (/sat with|let it be|let the feeling exist|without fixing|didn't escape|did not escape/i.test(evidence)) {
+    return "stayed with the feeling without trying to force it away";
+  }
+
+  if (/more present|noticed|watched the light|watched the sunlight|sound|birds|wind|body|breath/i.test(evidence)) {
+    return "used attention to the moment to get oriented";
+  }
+
+  if (/breathe|breathing|breath/i.test(evidence)) {
+    return "used breathing to steady the moment";
+  }
+
+  if (/walk|run|gym|stretch|outside/i.test(evidence)) {
+    return /clear my head|reset|steady/i.test(normalizedEvidence) ? "used movement to clear some emotional pressure" : `turned toward ${label.toLowerCase()} as a regulating action`;
+  }
+
+  if (/talked|called|texted|spent time with|reached out/i.test(evidence)) {
+    return "reached toward connection instead of holding it alone";
+  }
+
+  return label.toLowerCase();
+}
+
+function describeRestorativeMoment(value: string, evidence: string) {
+  if (/clarity|clearer|truth|honest/i.test(evidence) || /clarity|clearer|truth|honest/i.test(value)) return "moment of clarity";
+  if (/more present|noticed|aware|awareness|saw it clearly/i.test(evidence) || /presence|awareness/i.test(value)) return "moment of awareness";
+  if (/quiet|slowed down|didn't rush|did not rush/i.test(evidence) || /quiet/i.test(value)) return "moment of quiet";
+  if (/steady|steadier|grounded|settled|calm|calmer|enough/i.test(evidence) || /ground|steady/i.test(value)) return "moment of grounding";
+  if (/lighter|relieved|eased|release/i.test(evidence) || /release/i.test(value)) return "moment of release";
+  return "";
+}
+
+function isNotablePhraseCandidate(sentence: string) {
+  return (
+    sentence.length >= 24 &&
+    !/^(today|then|later|after that|i went|i was|it was)\b/i.test(sentence.trim()) &&
+    (/(felt|realized|noticed|maybe|enough|present|clearer|honest|truth|steady|steadier|lighter|unsafe|wrong|off|watching|waiting|worried|angry|furious|hostile|calm|relieved|grounded)/i.test(
+      sentence
+    ) ||
+      /["']/i.test(sentence))
+  );
+}
+
+function analysisLikeCoreLine(entry: string) {
+  return (
+    splitSentences(entry).find(
+      (sentence) =>
+        isNotablePhraseCandidate(sentence) &&
+        /(unsafe|wrong|off|present|clearer|enough|steady|steadier|watching|waiting|worried|angry|furious|relieved|grounded)/i.test(sentence)
+    ) ?? null
+  );
+}
+
 function normalizeConceptLabel(label: string) {
   const normalized = label.trim().toLowerCase();
 
@@ -405,7 +583,11 @@ function shouldPromoteTopic(label: string) {
     "pressure",
     "movement",
     "coffee",
-    "tea"
+    "tea",
+    "family",
+    "manager",
+    "friend",
+    "partner"
   ].includes(normalized);
 }
 
@@ -1203,6 +1385,24 @@ function extractStateSignals(entry: string) {
       });
     }
 
+    if (hasConcernContext(sentence.sentence) && !isConflict(sentence) && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: /(trying to find out|looking into|investigat|waiting for information)/i.test(sentence.sentence)
+          ? "investigative"
+          : /(suspicious|don't trust|do not trust|something felt off)/i.test(sentence.sentence)
+            ? "suspicious"
+            : /(watchful|keeping an eye|on guard)/i.test(sentence.sentence)
+              ? "watchful"
+              : /(vigilant|alert)/i.test(sentence.sentence)
+                ? "vigilant"
+                : "concerned",
+        tone: /(curious|wondering|trying to understand)/i.test(sentence.sentence) ? "liminal" : "negative",
+        evidence: sentence.sentence,
+        weight: 1.6 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
     if (isConflict(sentence) || /(hate|wanted to hurt|wanted revenge|wanted to retaliate|destroy)/i.test(sentence.sentence)) {
       signals.push({
         label: /(rage|furious|enraged)/i.test(sentence.sentence)
@@ -1234,13 +1434,18 @@ function extractStateSignals(entry: string) {
 }
 
 function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof extractEvents>, stateResult: ReturnType<typeof extractStateSignals>) {
-  const supportCandidates: JournalAnalysis["supports"] = eventsResult.events
-    .filter((event) => event.kind === "support")
+  const detectedSupports = eventsResult.events.filter((event) => event.kind === "support");
+  const eligibleSupports = detectedSupports
     .filter((event) => !eventsResult.events.some((other) => other.kind === "stressor" && other.evidence === event.evidence && other.weight >= event.weight))
-    .filter((event) => !isConflict({ ...eventsResult.sentences[event.index], sentence: event.evidence, normalized: event.evidence.toLowerCase() }))
+    .filter((event) => {
+      const sentence = eventsResult.sentences[event.index];
+      return sentence ? isEligibleSupportCandidate(event, sentence) : false;
+    });
+
+  const supportCandidates: JournalAnalysis["supports"] = eligibleSupports
     .sort((a, b) => b.weight - a.weight)
     .map((event) => ({
-      label: event.label,
+      label: normalizePromotedConcept(event.label, event.evidence, "support"),
       category: event.category,
       evidence: event.evidence,
       impact:
@@ -1253,33 +1458,44 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
               : "helpful"
     }));
 
-  const supports = dedupeByLabelAndEvidence(supportCandidates)
+  const promotedSupports = dedupeByLabelAndEvidence(supportCandidates)
     .filter((event) => isEvidenceLabelMatch(event.label, event.evidence))
     .slice(0, 4);
 
-  const copingActions: JournalAnalysis["coping_actions"] = supports.map((support) => ({
-    action: support.label,
-    impact: support.impact === "mixed" ? "neutral" : "helpful"
-  }));
+  const supports = promotedSupports;
+
+  const copingActions: JournalAnalysis["coping_actions"] = promotedSupports
+    .filter((support) => ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(support.category))
+    .map((support) => ({
+      action: describeCopingAction(support.label, support.evidence, support.category),
+      impact: (support.impact === "mixed" ? "neutral" : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
+    }))
+    .slice(0, 4);
 
   const restorativeSignals = unique([
-    ...supports.filter((item) => item.impact === "grounding" || item.impact === "helpful" || item.impact === "validating").map((item) => normalizeConceptLabel(item.label)),
+    ...supports
+      .map((item) => describeRestorativeMoment(item.label, item.evidence))
+      .filter(Boolean),
     ...stateResult.signals
-      .filter((item) => item.label === "present" || item.label === "accepting" || item.label === "steady" || item.label === "mixed recovery")
-      .map((item) => normalizeConceptLabel(item.label))
-  ]).slice(0, 4);
+      .filter((item) => item.label === "present" || item.label === "accepting" || item.label === "steady" || item.label === "mixed recovery" || item.label === "emotionally honest")
+      .map((item) => describeRestorativeMoment(item.label, item.evidence))
+      .filter(Boolean)
+  ]).slice(0, 3);
 
   return { supports, copingActions, restorativeSignals };
 }
 
 function detectStressors(_entry: string, eventsResult: ReturnType<typeof extractEvents>, stateResult: ReturnType<typeof extractStateSignals>) {
-  const stressorCandidates = eventsResult.events
-    .filter((event) => event.kind === "stressor")
-    .filter((event) => indicatesActualStrain(eventsResult.sentences[event.index]))
+  const detectedStressors = eventsResult.events.filter((event) => event.kind === "stressor");
+  const eligibleStressors = detectedStressors
+    .filter((event) => {
+      const sentence = eventsResult.sentences[event.index];
+      return sentence ? isEligibleStressorCandidate(event, sentence) : false;
+    })
     .filter((event) => !eventsResult.events.some((other) => other.kind === "support" && other.evidence === event.evidence && other.weight >= event.weight))
     .sort((a, b) => b.weight - a.weight)
     .map((event) => ({
-      label: event.label,
+      label: normalizePromotedConcept(event.label, event.evidence, "stressor"),
       category: event.category,
       evidence: event.evidence,
       intensity: clamp(
@@ -1289,9 +1505,12 @@ function detectStressors(_entry: string, eventsResult: ReturnType<typeof extract
       )
     }));
 
-  const stressors = dedupeByLabelAndEvidence(stressorCandidates)
+  const promotedStressors = dedupeByLabelAndEvidence(eligibleStressors)
+    .filter((item) => !isWeakEntityLabel(item.label))
     .filter((item) => isEvidenceLabelMatch(item.label, item.evidence) || indicatesActualStrain(eventsResult.sentences.find((sentence) => sentence.sentence === item.evidence) ?? eventsResult.sentences[0]))
     .slice(0, 3);
+
+  const stressors = promotedStressors;
 
   const triggers: JournalAnalysis["triggers"] = stressors.map((item) => ({
     type:
@@ -1340,11 +1559,15 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
     const grounded = weights.grounded;
     const liminal = weights.liminal;
     const reactive = weights.reactive;
+    const watchful = segmentSignals.filter((signal) => isWatchfulEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0);
     const ranked = [...segmentSignals].sort((a, b) => b.weight - a.weight);
+    const totalStrength = negative + positive + grounded + liminal + reactive + watchful;
 
     const label: string =
       reactive >= Math.max(grounded + positive, negative - 0.2) && ranked.find((signal) => isReactiveEmotion(signal.label))?.label
         ? ranked.find((signal) => isReactiveEmotion(signal.label))?.label ?? "reactive"
+        : watchful >= Math.max(negative - 0.1, liminal, 1.4)
+          ? ranked.find((signal) => isWatchfulEmotion(signal.label))?.label ?? "concerned"
         : liminal >= 1.8 && grounded >= 1.1
           ? "unsettled but grounded"
           : liminal >= 2.1
@@ -1361,12 +1584,36 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
                   ? ranked.find((signal) => signal.tone === "positive" || signal.tone === "grounded")?.label ?? "steady"
                   : ranked[0]?.label ?? "steady";
 
-    return { label, negative, positive, grounded, liminal, reactive, ranked };
+    return { label, negative, positive, grounded, liminal, reactive, watchful, totalStrength, ranked };
   }
 
   const startSnapshot = segmentSnapshot(slices[0]);
   const middleSnapshot = segmentSnapshot(slices[1]);
   const endSnapshot = segmentSnapshot(slices[2]);
+  const arcStrength = startSnapshot.totalStrength + middleSnapshot.totalStrength + endSnapshot.totalStrength;
+  const lowSignalArc =
+    sentences.length <= 2 ||
+    arcStrength < 4.8 ||
+    [startSnapshot.label, middleSnapshot.label, endSnapshot.label].filter(Boolean).length > 0 &&
+      new Set([startSnapshot.label, middleSnapshot.label, endSnapshot.label]).size === 1;
+
+  if (lowSignalArc) {
+    const dominant =
+      [endSnapshot, middleSnapshot, startSnapshot]
+        .sort((a, b) => b.totalStrength - a.totalStrength)
+        .find((snapshot) => snapshot.totalStrength > 0.6)?.label ?? "steady";
+
+    return {
+      start: dominant,
+      middle: dominant,
+      reaction: dominant,
+      end: dominant,
+      direction: "unchanged" as const,
+      arcMode: "single-state" as const,
+      arcConfidence: arcStrength < 3.6 ? 0.28 : 0.48
+    };
+  }
+
   const start = startSnapshot.label;
   const middle = middleSnapshot.label;
   const end = endSnapshot.label;
@@ -1387,9 +1634,11 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const reaction =
     middleSnapshot.reactive >= Math.max(startSnapshot.reactive, endSnapshot.reactive, 1.2)
       ? middleSnapshot.ranked.find((signal) => isReactiveEmotion(signal.label))?.label ?? middle
+      : middleSnapshot.watchful >= Math.max(startSnapshot.watchful, endSnapshot.watchful, 1.3)
+        ? middleSnapshot.ranked.find((signal) => isWatchfulEmotion(signal.label))?.label ?? middle
       : middle;
 
-  return { start, middle, reaction, end, direction };
+  return { start, middle, reaction, end, direction, arcMode: "sequenced" as const, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
 }
 
 function synthesizeInterpretation(
@@ -1398,7 +1647,8 @@ function synthesizeInterpretation(
   stateResult: ReturnType<typeof extractStateSignals>,
   supportsResult: ReturnType<typeof detectSupportsAndCoping>,
   stressorsResult: ReturnType<typeof detectStressors>,
-  timeline: ReturnType<typeof buildEmotionalTimeline>
+  timeline: ReturnType<typeof buildEmotionalTimeline>,
+  userCheckIns?: UserCheckIns
 ) {
   const { sentences, signals } = stateResult;
   const { supports, copingActions, restorativeSignals } = supportsResult;
@@ -1422,7 +1672,9 @@ function synthesizeInterpretation(
   const positiveWeight = signals.filter((signal) => signal.tone === "positive").reduce((sum, signal) => sum + signal.weight, 0) + supports.length * 0.8 + groundedWeight;
   const negativeWeight = signals.filter((signal) => signal.tone === "negative").reduce((sum, signal) => sum + signal.weight, 0) + stressors.length * 0.9;
   const reactiveWeight = signals.filter((signal) => isReactiveEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0);
+  const watchfulWeight = signals.filter((signal) => isWatchfulEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0);
   const acuteRiskWeight = signals.filter((signal) => signal.label === "acute despair").reduce((sum, signal) => sum + signal.weight, 0);
+  const checkInProfile = getCheckInInterpretationProfile(userCheckIns);
   const topSupport = supports[0];
   const topStressor = stressors[0];
   const startState = timeline.start ?? "steady";
@@ -1440,6 +1692,10 @@ function synthesizeInterpretation(
     primaryEmotion =
       centralSignals.find((label) => ["rageful", "hostile", "spiteful", "resentful", "angry", "vindicated", "disgusted", "fearful", "alarmed"].includes(label)) ??
       primaryEmotion;
+  } else if (watchfulWeight >= Math.max(negativeWeight - 0.15, liminalWeight, 1.8)) {
+    primaryEmotion =
+      centralSignals.find((label) => ["concerned", "suspicious", "watchful", "vigilant", "curious", "investigative", "fearful", "alarmed"].includes(label)) ??
+      "concerned";
   } else if (liminalWeight >= 2.4 && groundedWeight >= 1.2) primaryEmotion = "unsettled but grounded";
   else if (liminalWeight >= 2.6 && negativeWeight < liminalWeight + 1.5) primaryEmotion = "transitional";
   else if (groundedWeight >= 2.1 && negativeWeight <= groundedWeight + 0.6 && reactiveWeight < 1) primaryEmotion = signals.some((signal) => signal.label === "accepting") ? "accepting" : "present";
@@ -1447,6 +1703,20 @@ function synthesizeInterpretation(
   else if (supports.length > 0 && negativeWeight < positiveWeight) primaryEmotion = supports.some((item) => item.impact === "grounding") ? "steady" : "relieved";
   else if (stressors.length > 0 && negativeWeight > positiveWeight + 0.8) primaryEmotion = centralSignals.find((label) => !["present", "steady", "reflective"].includes(label)) ?? primaryEmotion;
   else if (isMeaningfulDiscomfort(sentences[Math.min(1, Math.max(0, sentences.length - 1))] ?? sentences[0])) primaryEmotion = signals.some((signal) => signal.label === "emotionally honest") ? "emotional honesty" : "tender";
+
+  if (checkInProfile.highStress && !acuteRiskWeight && !["acute despair", "hostile", "rageful", "angry", "spiteful", "fearful", "alarmed", "anxious", "overwhelmed", "tense"].includes(primaryEmotion)) {
+    primaryEmotion =
+      centralSignals.find((label) => ["alarmed", "fearful", "anxious", "tense", "overwhelmed", "concerned", "watchful"].includes(label)) ??
+      (checkInProfile.highEnergy ? "activated" : "tense");
+  }
+
+  if (checkInProfile.highMood && !acuteRiskWeight && !checkInProfile.highStress && ["sad", "grieving", "numb", "drained"].includes(primaryEmotion) && positiveWeight >= negativeWeight - 0.4) {
+    primaryEmotion = centralSignals.find((label) => ["joyful", "hopeful", "relieved", "steady", "grounded", "satisfied"].includes(label)) ?? "steady";
+  }
+
+  if (checkInProfile.lowEnergy && checkInProfile.lowMood && !acuteRiskWeight && ["present", "steady", "grounded"].includes(primaryEmotion) && negativeWeight >= positiveWeight) {
+    primaryEmotion = centralSignals.find((label) => ["numb", "drained", "sad", "lonely"].includes(label)) ?? "drained";
+  }
 
   const secondaryEmotions = unique(
     rankedStates
@@ -1459,14 +1729,25 @@ function synthesizeInterpretation(
   let summary = "";
   if (acuteRiskWeight >= 2.4) {
     summary = "The entry carries acute despair language, and the surrounding tone stays heavy rather than calming by the end.";
+  } else if (timeline.arcMode === "single-state") {
+    summary =
+      checkInProfile.highStress && checkInProfile.highEnergy
+        ? `The entry stays in a highly activated state, with more intensity than resolution across the whole reflection.`
+        : watchfulWeight >= 1.6 && negativeWeight <= watchfulWeight + 0.8
+          ? "The entry stays in a watchful, concerned frame rather than moving through a large emotional shift."
+          : `The entry stays mostly in one emotional frame, landing as ${primaryEmotion} rather than moving through a strong before-and-after change.`;
   } else if (reactiveWeight >= 2.1 && endState === reactionState) {
     summary = `The entry intensifies into ${reactionState}, and it lands there without much sign of resolution.`;
+  } else if (watchfulWeight >= 1.8 && endState === reactionState) {
+    summary = `The entry stays alert and concerned, with more watchfulness than release by the end.`;
   } else if (reactiveWeight >= 1.8 && /(present|accepting|steady|relieved|clarifying|unsettled but grounded)/i.test(endState)) {
     summary = `The entry moves through a sharper reactive moment and then lands in a more ${endState} place by the end.`;
   } else if (primaryEmotion === "transitional" || primaryEmotion === "unsettled but grounded") {
     summary = topSupport
       ? `The entry sits in a transitional space, with uncertainty still present but ${topSupport.label} helping it land in a more grounded place.`
       : "The entry feels transitional rather than crisis-driven, holding uncertainty and awareness at the same time.";
+  } else if (watchfulWeight >= 1.7 && topStressor) {
+    summary = `${topStressor.label} creates the clearest point of concern, and the entry lands more watchful and alert than simply sad or reflective.`;
   } else if (reactionState !== startState && endState !== reactionState && /(present|accepting|steady|relieved|clarifying|unsettled but grounded)/i.test(endState)) {
     summary = `The entry opens in ${startState}, moves through ${reactionState}, and lands closer to ${endState} by the end.`;
   } else if (topStressor && topSupport && timeline.direction === "improved") {
@@ -1482,26 +1763,51 @@ function synthesizeInterpretation(
     summary = `The entry moves from ${startState} through ${middleState} and lands closer to ${endState}, with an overall tone that feels ${primaryEmotion}.`;
   }
 
+  if (checkInProfile.highMood && stressors.length > 0 && !/overall|mixed|both|alongside/i.test(summary)) {
+    summary += " Even with the strain, the overall check-in suggests the day still held more positive footing than the hardest moment alone would imply.";
+  } else if (checkInProfile.highStress && /steady|present|accepting/.test(summary) && stressors.length > 0) {
+    summary += " The user check-in still points to high strain, so the steadier ending reads more like partial regulation than full ease.";
+  } else if (checkInProfile.lowEnergy && !/low energy|depleted|drained|flat/.test(summary) && negativeWeight >= positiveWeight) {
+    summary += " The check-in also suggests the day landed with lower energy than the text alone might imply.";
+  }
+
   const sentimentScore = clamp(Number(((positiveWeight - negativeWeight) / 6).toFixed(2)), -1, 1);
   const sentiment: JournalAnalysis["sentiment"] = {
     label: positiveWeight > 0.6 && negativeWeight > 0.6 ? "mixed" : sentimentScore > 0.2 ? "positive" : sentimentScore < -0.2 ? "negative" : "neutral",
     score: sentimentScore
   };
 
-  const moodScore = clamp(Math.round(5.5 + sentimentScore * 3), 1, 10);
-  const stressLevel = clamp(Math.round(3 + negativeWeight * 1.1), 1, 10);
-  const energyLevel = clamp(Math.round(5 + (supports.some((item) => item.impact === "energizing") ? 2 : 0) - (signals.some((signal) => signal.label === "drained") ? 2 : 0)), 1, 10);
-  const energyDirection: JournalAnalysis["energy_direction"] = stressLevel >= 7 ? "draining" : supports.length > 0 && positiveWeight >= negativeWeight ? "restorative" : positiveWeight > 0.8 && negativeWeight > 0.8 ? "mixed" : "neutral";
+  const inferredMoodScore = clamp(Math.round(5.5 + sentimentScore * 3), 1, 10);
+  const inferredStressLevel = clamp(Math.round(3 + negativeWeight * 1.1), 1, 10);
+  const inferredEnergyLevel = clamp(Math.round(5 + (supports.some((item) => item.impact === "energizing") ? 2 : 0) - (signals.some((signal) => signal.label === "drained") ? 2 : 0)), 1, 10);
+  const moodScore = checkInProfile.mood ?? inferredMoodScore;
+  const stressLevel = checkInProfile.stress ?? inferredStressLevel;
+  const energyLevel = checkInProfile.energy ?? inferredEnergyLevel;
+  const energyDirection: JournalAnalysis["energy_direction"] =
+    stressLevel >= 8 && energyLevel >= 7
+      ? "mixed"
+      : stressLevel >= 7
+        ? "draining"
+        : supports.length > 0 && positiveWeight >= negativeWeight
+          ? "restorative"
+          : positiveWeight > 0.8 && negativeWeight > 0.8
+            ? "mixed"
+            : energyLevel >= 7
+              ? "restorative"
+              : "neutral";
 
   const recurringTopics = unique([
-    ...supports.map((item) => normalizeConceptLabel(item.label)).filter(shouldPromoteTopic),
-    ...stressors.map((item) => normalizeConceptLabel(item.label)).filter(shouldPromoteTopic),
     liminalWeight >= 2.4 ? "transition" : null,
-    groundedWeight >= 1.8 ? "presence" : null,
-    signals.some((signal) => signal.label === "accepting") ? "acceptance" : null,
+    groundedWeight >= 1.8 && supports.some((item) => ["presence", "routine", "self-regulation"].includes(item.category)) ? "self-regulation" : null,
+    supports.some((item) => item.category === "connection") ? "social connection" : null,
+    stressors.some((item) => item.category === "work") ? "work pressure" : null,
+    stressors.some((item) => item.category === "finance") ? "financial strain" : null,
+    stressors.some((item) => item.category === "family") ? "family concern" : null,
+    stressors.some((item) => item.category === "relationship" || item.category === "conflict") ? "relationship strain" : null,
     isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null,
-    reactiveWeight >= 1.8 ? "reactivity" : null
-  ]).slice(0, 5);
+    watchfulWeight >= 1.8 ? "watchfulness" : null,
+    reactiveWeight >= 1.8 ? "reactive strain" : null
+  ]).slice(0, 3);
 
   const themes = unique([
     supports.some((item) => item.category === "routine" || item.category === "presence") ? "self-regulation" : null,
@@ -1511,12 +1817,24 @@ function synthesizeInterpretation(
     stressors.some((item) => item.category === "work") ? "work pressure" : null,
     stressors.some((item) => item.category === "conflict") ? "conflict" : null,
     liminalWeight >= 2.4 ? "transition" : null,
+    watchfulWeight >= 1.8 ? "watchfulness" : null,
     signals.some((signal) => signal.label === "accepting") ? "acceptance" : null,
     signals.some((signal) => signal.label === "present") ? "presence" : null,
     isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null,
     signals.some((signal) => signal.label === "mixed recovery") ? "emerging clarity" : null,
     reactiveWeight >= 1.8 ? "reactive strain" : null
-  ]).slice(0, 6);
+  ]).slice(0, 5);
+
+  const notablePhrases = unique([
+    ...getCentralSentences(sentences)
+      .map((sentence) => sentence.sentence)
+      .filter(isNotablePhraseCandidate)
+      .slice(0, 2),
+    findMatch(entry, /maybe that'?s enough/i) || null,
+    findMatch(entry, /didn't solve anything but felt more present/i) || null,
+    findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null,
+    analysisLikeCoreLine(entry)
+  ]).slice(0, 3);
 
   return {
     summary,
@@ -1553,8 +1871,8 @@ function synthesizeInterpretation(
     themes,
     recurringTopics,
     personalKeywords: unique([
-      ...supports.map((item) => item.label).filter((item) => item.length > 3),
-      ...stressors.map((item) => item.label).filter((item) => item.length > 3),
+      ...supports.map((item) => item.label).filter((item, index) => isEligiblePersonalKeyword(item, supports[index]?.evidence ?? "")),
+      ...stressors.map((item) => item.label).filter((item, index) => isEligiblePersonalKeyword(item, stressors[index]?.evidence ?? "")),
       findMatch(entry, /maybe that'?s enough/i) || null,
       findMatch(entry, /didn't solve anything but felt more present/i) || null,
       findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null
@@ -1573,29 +1891,25 @@ function synthesizeInterpretation(
       ...stressors
         .slice(0, 2)
         .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
-        .map((item) => JSON.stringify({ text: item.evidence, type: "stressor" as const, label: normalizeConceptLabel(item.label) })),
+        .map((item) => JSON.stringify({ text: item.evidence, type: "stressor" as const, label: normalizePromotedConcept(item.label, item.evidence, "stressor") })),
       ...supports
         .slice(0, 2)
         .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
-        .map((item) => JSON.stringify({ text: item.evidence, type: "support" as const, label: normalizeConceptLabel(item.label) })),
+        .map((item) => JSON.stringify({ text: item.evidence, type: "support" as const, label: normalizePromotedConcept(item.label, item.evidence, "support") })),
       ...signals
         .filter((item) => ["negative", "grounded", "liminal"].includes(item.tone))
+        .filter((item) => !isWeakEntityLabel(item.label))
         .slice(0, 2)
         .map((item) => JSON.stringify({ text: item.evidence, type: "emotion" as const, label: normalizeConceptLabel(item.label) })),
       ...recurringTopics.slice(0, 1).map((item) => JSON.stringify({ text: item, type: "topic" as const, label: item }))
     ]).map((item) => JSON.parse(item) as JournalAnalysis["evidence_spans"][number]),
-    notablePhrases: unique([
-      findMatch(entry, /maybe that'?s enough/i) || null,
-      findMatch(entry, /didn't solve anything but felt more present/i) || null,
-      findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null,
-      ...sentences.slice(0, 2).map((sentence) => sentence.sentence)
-    ]).slice(0, 4),
+    notablePhrases,
     reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null, timeline.reaction !== timeline.start ? `reaction: ${timeline.reaction}` : null]).slice(0, 6),
     confidence: {
-      primary_emotion: rankedStates.length > 0 ? 0.86 : 0.5,
+      primary_emotion: rankedStates.length > 0 ? (timeline.arcMode === "single-state" ? 0.74 : 0.86) : 0.5,
       triggers: stressors.length > 0 ? 0.82 : 0.42,
       coping_actions: supports.length > 0 ? 0.84 : 0.4,
-      overall: signals.length > 0 || supports.length > 0 || stressors.length > 0 ? 0.8 : 0.46
+      overall: signals.length > 0 || supports.length > 0 || stressors.length > 0 ? (timeline.arcMode === "single-state" ? 0.72 : 0.8) : 0.46
     },
     supports,
     copingActions,
@@ -1696,16 +2010,64 @@ function detectSafetyAssessment(rawText: string): JournalAnalysis["safety_assess
   };
 }
 
-function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
+function applyCheckInGuardrailsToAnalysis(analysis: JournalAnalysis, userCheckIns?: UserCheckIns) {
+  const profile = getCheckInInterpretationProfile(userCheckIns);
+
+  if (!userCheckIns || Object.values(userCheckIns).every((value) => value === null || value === undefined)) {
+    return analysis;
+  }
+
+  let next = {
+    ...analysis,
+    user_mood: profile.mood ?? null,
+    user_stress: profile.stress ?? null,
+    user_energy: profile.energy ?? null,
+    mood_score: profile.mood ?? analysis.mood_score,
+    stress_level: profile.stress ?? analysis.stress_level,
+    energy_level: profile.energy ?? analysis.energy_level
+  };
+
+  if (profile.highStress && !/(acute despair|hostile|rageful|spiteful|angry|fearful|alarmed|anxious|overwhelmed|tense|concerned|watchful|vigilant)/i.test(next.primary_emotion)) {
+    next.primary_emotion = profile.highEnergy ? "activated" : "tense";
+  }
+
+  if (profile.highMood && /(sad|grieving|numb|drained)/i.test(next.primary_emotion) && next.safety_assessment.level === "none") {
+    next.primary_emotion = next.secondary_emotions.find((item) => /(hopeful|relieved|steady|joyful|grounded|satisfied)/i.test(item)) ?? "mixed recovery";
+  }
+
+  if (profile.lowEnergy && /(steady|present|grounded)/i.test(next.primary_emotion) && profile.lowMood) {
+    next.primary_emotion = "drained";
+  }
+
+  if (profile.highStress && /steady|present|accepting|neutral/i.test(next.summary)) {
+    next.summary += " The check-in still points to high strain, so any steadiness here should be read as partial regulation rather than full ease.";
+  } else if (profile.highMood && !/positive footing|overall check-in|still held/i.test(next.summary) && next.sentiment.label !== "negative") {
+    next.summary += " The check-in suggests the day still carried more positive footing overall than the hardest moment alone might imply.";
+  }
+
+  next.energy_direction =
+    next.stress_level >= 8 && next.energy_level >= 7
+      ? "mixed"
+      : next.stress_level >= 7
+        ? "draining"
+        : next.energy_level >= 7
+          ? "restorative"
+          : next.energy_direction;
+
+  return validateAnalysis(next);
+}
+
+function buildHeuristicAnalysis(rawText: string, userCheckIns?: UserCheckIns): JournalAnalysis {
   const eventsResult = extractEvents(rawText);
   const stateResult = extractStateSignals(rawText);
   const supportsResult = detectSupportsAndCoping(rawText, eventsResult, stateResult);
   const stressorsResult = detectStressors(rawText, eventsResult, stateResult);
   const timeline = buildEmotionalTimeline(rawText, stateResult, supportsResult.supports, stressorsResult.stressors);
-  const interpretation = synthesizeInterpretation(rawText, eventsResult, stateResult, supportsResult, stressorsResult, timeline);
+  const interpretation = synthesizeInterpretation(rawText, eventsResult, stateResult, supportsResult, stressorsResult, timeline, userCheckIns);
   const safetyAssessment = detectSafetyAssessment(rawText);
 
-  return validateAnalysis({
+  return applyCheckInGuardrailsToAnalysis(
+    validateAnalysis({
     raw_text: rawText,
     summary: interpretation.summary,
     primary_emotion: interpretation.primaryEmotion,
@@ -1745,15 +2107,17 @@ function buildHeuristicAnalysis(rawText: string): JournalAnalysis {
     reflection_tags: interpretation.reflectionTags,
     confidence: interpretation.confidence,
     safety_assessment: safetyAssessment
-  });
+    }),
+    userCheckIns
+  );
 }
 
-async function callOpenAI(rawText: string): Promise<{ analysis: JournalAnalysis; mode: "mock" | "openai" }> {
+async function callOpenAI(rawText: string, userCheckIns?: UserCheckIns): Promise<{ analysis: JournalAnalysis; mode: "mock" | "openai" }> {
   const prompt = await getPromptText();
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    return { analysis: buildMockAnalysis(rawText), mode: "mock" };
+    return { analysis: buildMockAnalysis(rawText, userCheckIns), mode: "mock" };
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1787,7 +2151,7 @@ async function callOpenAI(rawText: string): Promise<{ analysis: JournalAnalysis;
   const parsed = typeof content === "string" ? JSON.parse(content) : content;
 
   return {
-    analysis: validateAnalysis(parsed),
+    analysis: applyCheckInGuardrailsToAnalysis(validateAnalysis(parsed), userCheckIns),
     mode: "openai"
   };
 }
@@ -1796,24 +2160,27 @@ export async function getPromptText() {
   return fs.readFile(promptPath, "utf8");
 }
 
-export function buildMockAnalysis(rawText: string): JournalAnalysis {
+export function buildMockAnalysis(rawText: string, userCheckIns?: UserCheckIns): JournalAnalysis {
   if (rawText.trim().toLowerCase() === mockAnalysis.raw_text.toLowerCase()) {
-    return validateAnalysis({
-      ...mockAnalysis,
-      raw_text: rawText
-    });
+    return applyCheckInGuardrailsToAnalysis(
+      validateAnalysis({
+        ...mockAnalysis,
+        raw_text: rawText
+      }),
+      userCheckIns
+    );
   }
 
-  return buildHeuristicAnalysis(rawText);
+  return buildHeuristicAnalysis(rawText, userCheckIns);
 }
 
-export async function analyzeEntry(rawText: string): Promise<{ analysis: JournalAnalysis; mode: "mock" | "openai" }> {
+export async function analyzeEntry(rawText: string, userCheckIns?: UserCheckIns): Promise<{ analysis: JournalAnalysis; mode: "mock" | "openai" }> {
   if (!process.env.OPENAI_API_KEY) {
     return {
-      analysis: buildMockAnalysis(rawText),
+      analysis: buildMockAnalysis(rawText, userCheckIns),
       mode: "mock"
     };
   }
 
-  return callOpenAI(rawText);
+  return callOpenAI(rawText, userCheckIns);
 }

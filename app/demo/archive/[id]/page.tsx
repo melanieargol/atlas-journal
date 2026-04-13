@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AppFrame } from "@/components/AppFrame";
 import { ArchiveEntryDetail } from "@/components/ArchiveEntryDetail";
-import { getDemoEntryById } from "@/lib/demo";
+import { getDemoEntryWithPatternContext } from "@/lib/demo";
 
 export const metadata: Metadata = {
   title: "Atlas Journal | Demo Entry Detail"
@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 
 export default async function DemoArchiveEntryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const entry = await getDemoEntryById(id);
+  const detail = await getDemoEntryWithPatternContext(id);
 
-  if (!entry) {
+  if (!detail) {
     notFound();
   }
 
@@ -24,7 +24,7 @@ export default async function DemoArchiveEntryDetailPage({ params }: { params: P
       demoMode
       demoNote="sample data"
     >
-      <ArchiveEntryDetail entry={entry} readOnly />
+      <ArchiveEntryDetail entry={detail.entry} patternContext={detail.patternContext} readOnly />
     </AppFrame>
   );
 }

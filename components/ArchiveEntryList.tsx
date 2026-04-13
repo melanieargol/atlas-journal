@@ -20,10 +20,22 @@ function formatGroupLabel(date: string) {
   }).format(new Date(`${date}T00:00:00`));
 }
 
-export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: ArchiveListItem[]; basePath?: string }) {
-  const [search, setSearch] = useState("");
-  const [emotionFilter, setEmotionFilter] = useState("all");
-  const [themeFilter, setThemeFilter] = useState("all");
+export function ArchiveEntryList({
+  entries,
+  basePath = "/archive",
+  initialSearch = "",
+  initialEmotion = "all",
+  initialTheme = "all"
+}: {
+  entries: ArchiveListItem[];
+  basePath?: string;
+  initialSearch?: string;
+  initialEmotion?: string;
+  initialTheme?: string;
+}) {
+  const [search, setSearch] = useState(initialSearch);
+  const [emotionFilter, setEmotionFilter] = useState(initialEmotion);
+  const [themeFilter, setThemeFilter] = useState(initialTheme);
 
   const emotionOptions = useMemo(() => ["all", ...Array.from(new Set(entries.map((entry) => entry.primary_emotion)))], [entries]);
   const themeOptions = useMemo(
@@ -40,10 +52,12 @@ export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: 
         entry.summary.toLowerCase().includes(query) ||
         entry.preview.toLowerCase().includes(query) ||
         entry.primary_emotion.toLowerCase().includes(query) ||
-        entry.themes.some((theme) => theme.toLowerCase().includes(query));
+        entry.themes.some((theme) => theme.toLowerCase().includes(query)) ||
+        entry.tags.some((tag) => tag.toLowerCase().includes(query)) ||
+        entry.search_terms.some((term) => term.toLowerCase().includes(query));
 
       const matchesEmotion = emotionFilter === "all" || entry.primary_emotion === emotionFilter;
-      const matchesTheme = themeFilter === "all" || entry.themes.includes(themeFilter);
+      const matchesTheme = themeFilter === "all" || entry.themes.includes(themeFilter) || entry.tags.includes(themeFilter);
 
       return matchesSearch && matchesEmotion && matchesTheme;
     });
@@ -126,7 +140,7 @@ export function ArchiveEntryList({ entries, basePath = "/archive" }: { entries: 
                     <span className="archive-open-hint">Open entry</span>
                   </div>
                   <div className="tag-row">
-                    {entry.themes.slice(0, 3).map((theme) => (
+                    {entry.tags.slice(0, 3).map((theme) => (
                       <span key={theme} className="tag">
                         {theme}
                       </span>

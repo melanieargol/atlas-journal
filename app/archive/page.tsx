@@ -9,9 +9,17 @@ export const metadata: Metadata = {
   title: "Atlas Journal | Archive"
 };
 
-export default async function ArchivePage() {
+export default async function ArchivePage({
+  searchParams
+}: {
+  searchParams?: Promise<{ q?: string; theme?: string; emotion?: string }>;
+}) {
   await requireUser();
   const entries = await getArchiveEntries();
+  const params = searchParams ? await searchParams : undefined;
+  const initialSearch = params?.q ?? "";
+  const initialTheme = params?.theme ?? "all";
+  const initialEmotion = params?.emotion ?? "all";
 
   return (
     <AppFrame
@@ -34,7 +42,7 @@ export default async function ArchivePage() {
         </article>
       </section>
 
-      <ArchiveEntryList entries={entries} />
+      <ArchiveEntryList entries={entries} initialSearch={initialSearch} initialTheme={initialTheme} initialEmotion={initialEmotion} />
     </AppFrame>
   );
 }

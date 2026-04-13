@@ -31,6 +31,8 @@ export type ArchiveListItem = {
   preview: string;
   primary_emotion: string;
   themes: string[];
+  tags: string[];
+  search_terms: string[];
   energy_direction: JournalAnalysis["energy_direction"];
 };
 
@@ -59,4 +61,26 @@ export type RepeatedSignal = {
   count: number;
   kind: "keyword" | "stressor" | "support" | "topic" | "restorative";
   tone: "stress" | "support" | "topic" | "restorative";
+};
+
+export type PatternContextItem = {
+  label: string;
+  kind: "theme" | "keyword" | "stressor" | "support" | "coping" | "restorative";
+  tone: "stress" | "support" | "mixed" | "topic" | "restorative";
+  tier: "emerging" | "active" | "established" | "mixed";
+  relation: "stable" | "mixed role" | "shifting";
+  counts: {
+    d7: number;
+    d30: number;
+    d90: number;
+  };
+};
+
+export type EntryPatternContext = {
+  items: PatternContextItem[];
+  windows: {
+    short: "7d";
+    main: "30d";
+    long: "90d";
+  };
 };

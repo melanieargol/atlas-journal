@@ -5,7 +5,7 @@ type SafetySupportCardProps = {
 };
 
 export function SafetySupportCard({ assessment }: SafetySupportCardProps) {
-  if (assessment.level !== "moderate" && assessment.level !== "high") {
+  if (assessment.level === "none") {
     return null;
   }
 
@@ -14,7 +14,7 @@ export function SafetySupportCard({ assessment }: SafetySupportCardProps) {
       <div className="section-head compact-head">
         <div>
           <p className="section-label">Support</p>
-          <h2>Pause here and reach for support now.</h2>
+          <h2>{assessment.level === "low" ? "This entry sounds heavy." : "Pause here and reach for support now."}</h2>
         </div>
         <div className="entry-stats">
           <span>{assessment.level} concern</span>
@@ -22,7 +22,9 @@ export function SafetySupportCard({ assessment }: SafetySupportCardProps) {
       </div>
 
       <p className="support-banner-copy">
-        This entry sounds especially heavy or concerning. You deserve immediate support from a real person right now.
+        {assessment.level === "low"
+          ? "There is some heavier shutdown or hopeless language here. You do not need to handle that alone, even if it is not an emergency."
+          : "This entry sounds especially heavy or concerning. You deserve immediate support from a real person right now."}
       </p>
 
       {assessment.evidence.length > 0 ? (
@@ -50,7 +52,9 @@ export function SafetySupportCard({ assessment }: SafetySupportCardProps) {
       </div>
 
       <p className="muted-text support-banner-footnote">
-        If you may be in immediate danger, contact local emergency services now. If there is someone you trust nearby, reaching out to them right away can also help.
+        {assessment.level === "low"
+          ? "If the heaviness starts to feel unsafe, more urgent, or hard to hold, please contact 988, Samaritans at 116 123, or local emergency services if there is immediate danger."
+          : "If you may be in immediate danger, contact local emergency services now. If there is someone you trust nearby, reaching out to them right away can also help."}
       </p>
     </section>
   );

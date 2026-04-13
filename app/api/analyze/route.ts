@@ -39,7 +39,11 @@ export async function POST(request: Request) {
     let mode: Awaited<ReturnType<typeof analyzeEntry>>["mode"];
 
     try {
-      const result = await analyzeEntry(input.raw_text);
+      const result = await analyzeEntry(input.raw_text, {
+        user_mood: input.user_mood ?? null,
+        user_stress: input.user_stress ?? null,
+        user_energy: input.user_energy ?? null
+      });
       analysis = result.analysis;
       mode = result.mode;
     } catch (error) {
