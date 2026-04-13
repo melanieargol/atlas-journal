@@ -404,6 +404,76 @@ function hasConcernContext(text: string) {
   );
 }
 
+function compactSnippet(text: string, maxWords = 4, maxChars = 34) {
+  const cleaned = text
+    .replace(/["“”']/g, "")
+    .replace(/[.,!?;:()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  const words = cleaned.split(/\s+/).slice(0, maxWords);
+  const compact = words.join(" ").trim();
+  return compact.length > maxChars ? compact.slice(0, maxChars).trim() : compact;
+}
+
+function normalizeSupportLabel(label: string, evidence: string, category: string) {
+  const lowered = evidence.toLowerCase();
+
+  if (/(coffee with|lunch with|dinner with|spent time with|hung out with|went out with)/i.test(evidence) && /\b(friend|friends?)\b/i.test(evidence)) {
+    return "time with friends";
+  }
+
+  if (/(coffee with|lunch with|dinner with|spent time with|hung out with|went out with)/i.test(evidence) && /\b(sister|brother|mom|dad|family|parent)\b/i.test(evidence)) {
+    return "time with family";
+  }
+
+  if (/\bquiet house\b/i.test(evidence)) return "quiet house";
+  if (/\b(bookstore|book shop)\b/i.test(evidence)) return "bookstore outing";
+  if (/\b(gym|worked out|workout)\b/i.test(evidence)) return "gym session";
+  if (/\b(walked the dog|walk with lily|walk with the dog)\b/i.test(evidence)) return "dog walk";
+  if (/\b(walked|went for a walk|took a walk)\b/i.test(evidence) && /(clear my head|reset|outside|fresh air|felt better|steadier)/i.test(evidence)) {
+    return "walk";
+  }
+  if (/\b(music|playlist|song|songs)\b/i.test(evidence)) return "music";
+  if (/\b(sun|sunlight)\b/i.test(evidence)) return "sunlight";
+  if (/\b(outside|fresh air)\b/i.test(evidence) && !/\bwalk/i.test(evidence)) return "fresh air";
+  if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence) && /\b(home|kitchen)\b/i.test(evidence)) return "food at home";
+  if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence)) return "meal";
+  if (/\b(coffee|tea)\b/i.test(evidence) && /(slow|quiet|didn't rush|did not rush|took my time|sat with)/i.test(evidence)) return "small ritual";
+  if (category === "connection") return "social connection";
+  if (category === "movement") return "movement";
+  if (category === "accomplishment") return "finished task";
+  if (category === "resolution") return "resolution";
+
+  return compactSnippet(normalizePromotedConcept(label, evidence, "support"), 3, 26).toLowerCase();
+}
+
+function normalizeStressorLabel(label: string, evidence: string, category: string) {
+  const normalized = normalizePromotedConcept(label, evidence, "stressor");
+
+  if (/\bunsafe|home|door|house|hallway|outside the house\b/i.test(evidence) && /(unsafe|scared|alarm|wrong|off|threat)/i.test(evidence)) {
+    return "home safety scare";
+  }
+
+  if (/\b(dog|dogs)\b/i.test(evidence) && /(bark|barking|wouldn't stop|would not stop|kept barking)/i.test(evidence)) {
+    return "dog barking disruption";
+  }
+
+  if (/\b(routine|usual|schedule|plan)\b/i.test(evidence) && /(missed|off|thrown off|disrupted|didn't happen|did not happen)/i.test(evidence)) {
+    return "missed routine";
+  }
+
+  if (category === "pressure" && /(too much|overload|overwhelmed|pressure)/i.test(evidence)) {
+    return "overload";
+  }
+
+  return compactSnippet(normalized, 3, 28).toLowerCase();
+}
+
 function normalizePromotedConcept(label: string, evidence: string, bucket: "stressor" | "topic" | "keyword" | "support") {
   const normalizedLabel = normalizeConceptLabel(label);
   const normalizedEvidence = evidence.toLowerCase();
@@ -451,9 +521,11 @@ function isEligibleSupportCandidate(event: EventSignal, sentence: SentenceSignal
 }
 
 function isEligiblePersonalKeyword(label: string, evidence: string) {
-  const normalized = label.trim().toLowerCase();
+  const normalized = compactSnippet(label, 3, 28).toLowerCase();
   if (normalized.length < 4 || isWeakEntityLabel(normalized)) return false;
   if (!/[a-z]/i.test(normalized)) return false;
+  if (normalized.split(/\s+/).length > 3) return false;
+  if (/[.?!]/.test(label)) return false;
   if (/^(present|steady|transition|acceptance|movement|connection|resolution|pressure|disruption|conflict)$/.test(normalized)) return false;
   if (normalized.split(/\s+/).length === 1 && !/(call|walk|coffee|home|money|sleep|truth|clarity|rush|present|enough)/i.test(normalized) && !evidence.toLowerCase().includes(normalized)) {
     return false;
@@ -499,6 +571,10 @@ function describeCopingAction(label: string, evidence: string, category: string)
     return "slowed down on purpose";
   }
 
+  if (/paused|pause|waited before reacting|didn't react right away|did not react right away|let it sit|let it settle/i.test(evidence)) {
+    return "paused instead of reacting immediately";
+  }
+
   if (/sat with|let it be|let the feeling exist|without fixing|didn't escape|did not escape/i.test(evidence)) {
     return "stayed with the feeling without trying to force it away";
   }
@@ -517,6 +593,10 @@ function describeCopingAction(label: string, evidence: string, category: string)
 
   if (/talked|called|texted|spent time with|reached out/i.test(evidence)) {
     return "reached toward connection instead of holding it alone";
+  }
+
+  if (/made|brewed|cooked|prepared/i.test(evidence) && /(coffee|tea|meal|breakfast|dinner|lunch)/i.test(evidence)) {
+    return "used a quiet routine to steady the moment";
   }
 
   return label.toLowerCase();
@@ -542,6 +622,59 @@ function isNotablePhraseCandidate(sentence: string) {
   );
 }
 
+function scorePromotedSupport(item: JournalAnalysis["supports"][number]) {
+  let score = 1;
+  if (item.impact === "grounding" || item.impact === "validating") score += 1;
+  if (item.impact === "energizing") score += 0.8;
+  if (/steady|present|calm|clearer|lighter|relieved|enough|noticed|didn't rush|did not rush/i.test(item.evidence)) score += 0.8;
+  if (item.category === "routine" || item.category === "presence" || item.category === "connection") score += 0.5;
+  return score;
+}
+
+function scorePromotedStressor(item: JournalAnalysis["stressors"][number]) {
+  let score = item.intensity / 3;
+  if (/(unsafe|threat|wrong|scared|afraid|fight|hostile|burden|pressure|overload|pain|went wrong)/i.test(item.evidence)) score += 1.2;
+  if (/(family concern|relationship conflict|work pressure|financial strain|money stress|physical strain|home safety scare)/i.test(item.label)) score += 0.5;
+  return score;
+}
+
+function scoreRestorativeMoment(moment: string, evidence: string) {
+  let score = 1;
+  if (/clarity|grounding|release|awareness|quiet/.test(moment)) score += 0.8;
+  if (/felt more present|steadier|calmer|lighter|relieved|clearer|let it be|enough/i.test(evidence)) score += 1;
+  return score;
+}
+
+function hasInternalShiftLanguage(text: string) {
+  return /(felt more present|steadier|calmer|lighter|relieved|clearer|settled|softened|enough|let it be|grounded|more aware)/i.test(text);
+}
+
+function scoreNotablePhrase(sentence: string) {
+  let score = 1;
+  if (/[\"']/.test(sentence)) score += 0.5;
+  if (/(felt|realized|noticed|clearer|enough|present|wrong|unsafe|worried|angry|relieved|steady|truth|honest)/i.test(sentence)) score += 0.8;
+  if (sentence.length >= 48) score += 0.3;
+  return score;
+}
+
+function isSafetySensitiveText(text: string) {
+  return /(kill myself|end my life|want to die|suicidal|suicide|hurt myself|harm myself|don't want to be here|do not want to be here|wish i wasn't here|wish i was not here|wish i could disappear|want to disappear|better off without me|not wake up|overdose)/i.test(
+    text
+  );
+}
+
+function abstractSafetySensitiveText(text: string) {
+  if (/(kill myself|end my life|want to die|suicidal|suicide|hurt myself|harm myself|plan to|overdose)/i.test(text)) {
+    return "acute overwhelm";
+  }
+
+  if (/(don't want to be here|do not want to be here|wish i wasn't here|wish i was not here|wish i could disappear|want to disappear|better off without me|not wake up|vanish)/i.test(text)) {
+    return "existential strain";
+  }
+
+  return text;
+}
+
 function analysisLikeCoreLine(entry: string) {
   return (
     splitSentences(entry).find(
@@ -550,6 +683,127 @@ function analysisLikeCoreLine(entry: string) {
         /(unsafe|wrong|off|present|clearer|enough|steady|steadier|watching|waiting|worried|angry|furious|relieved|grounded)/i.test(sentence)
     ) ?? null
   );
+}
+
+function applySafetySensitiveSuppression(
+  interpretation: ReturnType<typeof synthesizeInterpretation>,
+  safetyAssessment: JournalAnalysis["safety_assessment"]
+) {
+  if (safetyAssessment.level === "none") {
+    return interpretation;
+  }
+
+  const sanitizeList = (items: string[]) =>
+    unique(
+      items.map((item) => {
+        if (!isSafetySensitiveText(item)) {
+          return item;
+        }
+
+        return abstractSafetySensitiveText(item);
+      })
+    );
+
+  if (safetyAssessment.level === "high") {
+    return {
+      ...interpretation,
+      supports: [],
+      copingActions: [],
+      restorativeSignals: [],
+      themes: [],
+      recurringTopics: [],
+      personalKeywords: [],
+      notablePhrases: [],
+      evidenceSpans: [],
+      joySources: [],
+      gratitudeMoments: [],
+      wins: [],
+      whatToRepeat: [],
+      customEmotionTerms: [],
+      summary: "This entry needs care before interpretation. Atlas Journal is pausing the normal analysis so support can lead."
+    };
+  }
+
+  if (safetyAssessment.level === "moderate") {
+    return {
+      ...interpretation,
+      personalKeywords: sanitizeList(interpretation.personalKeywords).slice(0, 4),
+      notablePhrases: sanitizeList(interpretation.notablePhrases).filter((item) => !isSafetySensitiveText(item)).slice(0, 2),
+      themes: interpretation.themes.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
+      recurringTopics: interpretation.recurringTopics.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
+      customEmotionTerms: sanitizeList(interpretation.customEmotionTerms)
+        .map((item) => (isSafetySensitiveText(item) ? abstractSafetySensitiveText(item) : item))
+        .slice(0, 3),
+      evidenceSpans: interpretation.evidenceSpans.filter((item) => item.type === "safety" || !isSafetySensitiveText(item.text)).slice(0, 4)
+    };
+  }
+
+  return {
+    ...interpretation,
+    personalKeywords: sanitizeList(interpretation.personalKeywords).slice(0, 4),
+    notablePhrases: interpretation.notablePhrases.slice(0, 2),
+    customEmotionTerms: sanitizeList(interpretation.customEmotionTerms).slice(0, 5)
+  };
+}
+
+function applySafetySensitiveSuppressionToAnalysis(analysis: JournalAnalysis): JournalAnalysis {
+  const safetyLevel = analysis.safety_assessment.level;
+
+  if (safetyLevel === "none") {
+    return analysis;
+  }
+
+  if (safetyLevel === "high") {
+    return validateAnalysis({
+      ...analysis,
+      summary:
+        "This entry needs care before interpretation. Atlas Journal is pausing the normal analysis so support can lead.",
+      supports: [],
+      coping_actions: [],
+      restorative_signals: [],
+      themes: [],
+      recurring_topics: [],
+      personal_keywords: [],
+      notable_phrases: [],
+      evidence_spans: analysis.evidence_spans.filter((item) => item.type === "safety"),
+      reflection_tags: [],
+      joy_sources: [],
+      gratitude_moments: [],
+      wins: [],
+      what_to_repeat: [],
+      custom_emotion_terms: []
+    });
+  }
+
+  const sanitizeList = (items: string[]) =>
+    unique(
+      items.map((item) => {
+        if (!isSafetySensitiveText(item)) {
+          return item;
+        }
+
+        return abstractSafetySensitiveText(item);
+      })
+    );
+
+  if (safetyLevel === "moderate") {
+    return validateAnalysis({
+      ...analysis,
+      personal_keywords: sanitizeList(analysis.personal_keywords).slice(0, 4),
+      notable_phrases: sanitizeList(analysis.notable_phrases).filter((item) => !isSafetySensitiveText(item)).slice(0, 2),
+      themes: analysis.themes.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
+      recurring_topics: analysis.recurring_topics.filter((item) => !/(acute despair|suicide|self-harm|harm|die|disappear)/i.test(item)).slice(0, 3),
+      custom_emotion_terms: sanitizeList(analysis.custom_emotion_terms).slice(0, 3),
+      evidence_spans: analysis.evidence_spans.filter((item) => item.type === "safety" || !isSafetySensitiveText(item.text)).slice(0, 4)
+    });
+  }
+
+  return validateAnalysis({
+    ...analysis,
+    personal_keywords: sanitizeList(analysis.personal_keywords).slice(0, 4),
+    notable_phrases: analysis.notable_phrases.slice(0, 2),
+    custom_emotion_terms: sanitizeList(analysis.custom_emotion_terms).slice(0, 5)
+  });
 }
 
 function normalizeConceptLabel(label: string) {
@@ -609,6 +863,96 @@ function isEvidenceLabelMatch(label: string, evidence: string) {
 
   if (normalizedLabel === "emerging steadiness") {
     return /(more present|steadier|grounded|clearer|less defended)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "watchfulness" || normalizedLabel === "investigation") {
+    return /(watching|watchful|keeping an eye|waiting for information|trying to find out|looking into|investigat|concerned|worried|felt off|something felt off)/i.test(
+      evidence
+    );
+  }
+
+  if (normalizedLabel === "family concern") {
+    return /\b(sister|brother|mom|dad|parent|family)\b/i.test(evidence) && /(worried|concerned|waiting|find out|felt off|not sure|unsure)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "relationship concern") {
+    return /\b(friend|partner|wife|husband|boyfriend|girlfriend|mike)\b/i.test(evidence) && /(worried|concerned|suspicious|don't trust|do not trust|felt off)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "relationship conflict") {
+    return /\b(friend|partner|wife|husband|boyfriend|girlfriend|mike)\b/i.test(evidence) && /(argued|fight|hostile|insult|yelled|threat)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "work pressure") {
+    return /(manager|meeting|deadline|work)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "money stress" || normalizedLabel === "financial strain") {
+    return /(refund call|money|budget|bills?|rent|finance)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "physical strain") {
+    return /(pain|migraine|sleep|sick|rough night)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "small ritual") {
+    return /(coffee|tea|meal|breakfast|lunch|dinner).*(slow|quiet|didn't rush|did not rush|took my time)|made coffee slowly/i.test(evidence);
+  }
+
+  if (normalizedLabel === "time with friends") {
+    return /(friend|friends)/i.test(evidence) && /(coffee with|lunch with|dinner with|spent time with|hung out with|went out with|talked with|talked to|called|texted)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "time with family") {
+    return /(sister|brother|mom|dad|family|parent)/i.test(evidence) && /(coffee with|lunch with|dinner with|spent time with|hung out with|went out with|talked with|talked to|called|texted)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "quiet house") {
+    return /\bquiet house\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "bookstore outing") {
+    return /\b(bookstore|book shop)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "gym session") {
+    return /\b(gym|worked out|workout)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "dog walk") {
+    return /\b(walked the dog|walk with lily|walk with the dog)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "walk") {
+    return /\b(walked|went for a walk|took a walk)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "music") {
+    return /\b(music|playlist|song|songs)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "sunlight") {
+    return /\b(sun|sunlight)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "fresh air") {
+    return /\b(outside|fresh air)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "food at home") {
+    return /\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence) && /\b(home|kitchen)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "meal") {
+    return /\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence);
+  }
+
+  if (normalizedLabel === "finished task") {
+    return /(finished|completed|got it done|wrapped up|followed through|made progress|crossed off|cleaned|submitted|figured it out|solved)/i.test(evidence);
+  }
+
+  if (normalizedLabel === "resolution") {
+    return /(finally|ended up|turned out|worked out|resolved|sorted out|got fixed)/i.test(evidence);
   }
 
   return normalizedEvidence.includes(normalizedLabel.replace(/\s+/g, " "));
@@ -1259,6 +1603,58 @@ function extractEvents(entry: string) {
       });
     }
 
+    if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i.test(sentence.sentence) && (positiveExperience || explicitRelief || gentleRegulation) && !negativeContext) {
+      events.push({
+        label: findMatch(sentence.sentence, /\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i) || "supportive environment",
+        category: "environment",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.55,
+        positive: 1.9,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/\b(music|playlist|song|songs)\b/i.test(sentence.sentence) && (positiveExperience || explicitRelief || gentleRegulation) && !negativeContext) {
+      events.push({
+        label: findMatch(sentence.sentence, /\b(music|playlist|song|songs)\b/i) || "music",
+        category: "comfort",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.45,
+        positive: 1.7,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(sentence.sentence) && (positiveExperience || gentleRegulation || explicitRelief) && !negativeContext) {
+      events.push({
+        label: findMatch(sentence.sentence, /\b(food|meal|breakfast|lunch|dinner)\b/i) || "meal",
+        category: "routine",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.45,
+        positive: 1.6,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(sentence.sentence) && !negativeContext) {
+      events.push({
+        label: "journaled it out",
+        category: "self-regulation",
+        evidence: sentence.sentence,
+        kind: "support",
+        weight: scoreSentenceStrength(sentence) + 0.5,
+        positive: 1.5,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
     if (/(walked|went for a walk|took a walk|ran|run|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam)/i.test(sentence.sentence) && !likelyIncidentalMovementMarkers.some((marker) => sentence.normalized.includes(marker))) {
       events.push({
         label: findMatch(sentence.sentence, /walked the dog|went for a walk|took a walk|run|ran|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam/i) || "movement",
@@ -1375,6 +1771,56 @@ function extractStateSignals(entry: string) {
       });
     }
 
+    if (/\bstill\b/i.test(sentence.sentence) && /(tense|on edge|watching|waiting|not sure|unsure|felt off|concerned|worried)/i.test(sentence.sentence)) {
+      signals.push({
+        label: "watchful",
+        tone: "liminal",
+        evidence: sentence.sentence,
+        weight: 1.7 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (/\bstill\b/i.test(sentence.sentence) && /(aware|noticed|present|breath|light|sound|body)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: "present",
+        tone: "grounded",
+        evidence: sentence.sentence,
+        weight: 1.6 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (/\bstill\b/i.test(sentence.sentence) && /(uncertain|waiting|not sure|unsure|in between|in-between)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: "anticipatory",
+        tone: "liminal",
+        evidence: sentence.sentence,
+        weight: 1.5 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (/\bquiet\b/i.test(sentence.sentence) && /(heavy|low|subdued|tired|drained)/i.test(sentence.sentence)) {
+      signals.push({
+        label: "subdued",
+        tone: "liminal",
+        evidence: sentence.sentence,
+        weight: 1.5 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (/\bquiet\b/i.test(sentence.sentence) && /(clear|clearer|honest|truth|grounded)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: "grounded",
+        tone: "grounded",
+        evidence: sentence.sentence,
+        weight: 1.6 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
     if (/(didn't solve anything but felt more present|did not solve anything but felt more present|still unsure but steadier|uncertain but grounded|uncertain but steadier)/i.test(sentence.sentence)) {
       signals.push({
         label: "mixed recovery",
@@ -1445,7 +1891,7 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
   const supportCandidates: JournalAnalysis["supports"] = eligibleSupports
     .sort((a, b) => b.weight - a.weight)
     .map((event) => ({
-      label: normalizePromotedConcept(event.label, event.evidence, "support"),
+      label: normalizeSupportLabel(event.label, event.evidence, event.category),
       category: event.category,
       evidence: event.evidence,
       impact:
@@ -1460,27 +1906,44 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
 
   const promotedSupports = dedupeByLabelAndEvidence(supportCandidates)
     .filter((event) => isEvidenceLabelMatch(event.label, event.evidence))
-    .slice(0, 4);
+    .map((event) => ({ ...event, score: scorePromotedSupport(event) }))
+    .filter((event) => event.score >= 2.1)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2)
+    .map(({ score, ...event }) => event);
 
   const supports = promotedSupports;
 
-  const copingActions: JournalAnalysis["coping_actions"] = promotedSupports
-    .filter((support) => ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(support.category))
-    .map((support) => ({
-      action: describeCopingAction(support.label, support.evidence, support.category),
-      impact: (support.impact === "mixed" ? "neutral" : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
-    }))
-    .slice(0, 4);
+  const copingActions: JournalAnalysis["coping_actions"] = dedupeByLabelAndEvidence(
+    eligibleSupports
+      .filter((support) => ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(support.category))
+      .filter((support) => /(didn't rush|did not rush|slowed down|pause|paused|let it sit|let it settle|sat with|let it be|stayed with|noticed|breath|breathe|walk|run|gym|reached out|called|texted|journaled|wrote it down|made|brewed|cooked|prepared)/i.test(support.evidence))
+      .map((support) => ({
+        label: describeCopingAction(support.label, support.evidence, support.category),
+        evidence: support.evidence,
+        action: describeCopingAction(support.label, support.evidence, support.category),
+        impact: (/breath|present|steady|didn't rush|did not rush|slowed down|let it be|sat with/i.test(support.evidence) ? "grounding" : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
+      }))
+  )
+    .filter((item) => item.action.length <= 44)
+    .slice(0, 2);
 
   const restorativeSignals = unique([
     ...supports
+      .filter((item) => hasInternalShiftLanguage(item.evidence))
       .map((item) => describeRestorativeMoment(item.label, item.evidence))
       .filter(Boolean),
     ...stateResult.signals
       .filter((item) => item.label === "present" || item.label === "accepting" || item.label === "steady" || item.label === "mixed recovery" || item.label === "emotionally honest")
+      .filter((item) => hasInternalShiftLanguage(item.evidence) || /accepting|steady|mixed recovery|emotionally honest/.test(item.label))
       .map((item) => describeRestorativeMoment(item.label, item.evidence))
       .filter(Boolean)
-  ]).slice(0, 3);
+  ])
+    .map((item) => ({ item, score: scoreRestorativeMoment(item, supports.find((support) => describeRestorativeMoment(support.label, support.evidence) === item)?.evidence ?? item) }))
+    .filter((item) => item.score >= 1.8)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.item)
+    .slice(0, 3);
 
   return { supports, copingActions, restorativeSignals };
 }
@@ -1495,7 +1958,7 @@ function detectStressors(_entry: string, eventsResult: ReturnType<typeof extract
     .filter((event) => !eventsResult.events.some((other) => other.kind === "support" && other.evidence === event.evidence && other.weight >= event.weight))
     .sort((a, b) => b.weight - a.weight)
     .map((event) => ({
-      label: normalizePromotedConcept(event.label, event.evidence, "stressor"),
+      label: normalizeStressorLabel(event.label, event.evidence, event.category),
       category: event.category,
       evidence: event.evidence,
       intensity: clamp(
@@ -1508,7 +1971,11 @@ function detectStressors(_entry: string, eventsResult: ReturnType<typeof extract
   const promotedStressors = dedupeByLabelAndEvidence(eligibleStressors)
     .filter((item) => !isWeakEntityLabel(item.label))
     .filter((item) => isEvidenceLabelMatch(item.label, item.evidence) || indicatesActualStrain(eventsResult.sentences.find((sentence) => sentence.sentence === item.evidence) ?? eventsResult.sentences[0]))
-    .slice(0, 3);
+    .map((item) => ({ ...item, score: scorePromotedStressor(item) }))
+    .filter((item) => item.score >= 2.6)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2)
+    .map(({ score, ...item }) => item);
 
   const stressors = promotedStressors;
 
@@ -1520,7 +1987,7 @@ function detectStressors(_entry: string, eventsResult: ReturnType<typeof extract
     description: item.evidence
   }));
 
-  return { stressors: stressors.slice(0, 4), triggers };
+  return { stressors: stressors.slice(0, 2), triggers };
 }
 
 function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof extractStateSignals>, supports: JournalAnalysis["supports"], stressors: JournalAnalysis["stressors"]) {
@@ -1617,16 +2084,20 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const start = startSnapshot.label;
   const middle = middleSnapshot.label;
   const end = endSnapshot.label;
+  const groundingEnd =
+    /(present|accepting|steady|relieved|clarifying|unsettled but grounded|mixed recovery|grounded)/i.test(end) ||
+    endSnapshot.grounded >= Math.max(endSnapshot.negative - 0.15, 1.4);
+  const reactiveMiddle = middleSnapshot.reactive >= Math.max(startSnapshot.reactive, endSnapshot.reactive, 1.2);
   const direction: JournalAnalysis["emotional_shift"]["direction"] =
     end === start
       ? middle !== start
         ? "mixed"
         : "unchanged"
-      : /(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery)/i.test(end) &&
-          !/(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery)/i.test(start) &&
+      : groundingEnd &&
+          !/(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery|grounded)/i.test(start) &&
           endSnapshot.reactive < startSnapshot.reactive + 0.2
         ? "improved"
-        : /(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(end) &&
+      : /(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(end) &&
             !/(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(start)
           ? "worsened"
           : "mixed";
@@ -1638,7 +2109,20 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
         ? middleSnapshot.ranked.find((signal) => isWatchfulEmotion(signal.label))?.label ?? middle
       : middle;
 
-  return { start, middle, reaction, end, direction, arcMode: "sequenced" as const, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
+  const arcMode =
+    reactiveMiddle && groundingEnd && end !== reaction
+      ? ("reactive-middle-then-settling" as const)
+      : startSnapshot.positive >= 1.2 && middleSnapshot.negative >= startSnapshot.positive + 0.4 && groundingEnd
+        ? ("steady-with-interruption" as const)
+        : direction === "unchanged"
+          ? ("static" as const)
+          : direction === "mixed" && end === reaction
+            ? ("unresolved" as const)
+            : direction === "mixed"
+              ? ("mixed-but-stable" as const)
+              : ("subtle-shift" as const);
+
+  return { start, middle, reaction, end, direction, arcMode, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
 }
 
 function synthesizeInterpretation(
@@ -1736,6 +2220,20 @@ function synthesizeInterpretation(
         : watchfulWeight >= 1.6 && negativeWeight <= watchfulWeight + 0.8
           ? "The entry stays in a watchful, concerned frame rather than moving through a large emotional shift."
           : `The entry stays mostly in one emotional frame, landing as ${primaryEmotion} rather than moving through a strong before-and-after change.`;
+  } else if (timeline.arcMode === "steady-with-interruption") {
+    summary = topStressor
+      ? `The entry starts from a steadier footing, gets interrupted by ${topStressor.label}, and then lands calmer than the hardest moment itself.`
+      : `The entry carries a steadier opening, a sharper interruption in the middle, and a more regulated ending than the peak reaction.`;
+  } else if (timeline.arcMode === "reactive-middle-then-settling") {
+    summary = `The entry moves through a sharper ${reactionState} reaction and then lands in a more ${endState} place by the end.`;
+  } else if (timeline.arcMode === "unresolved") {
+    summary = topStressor
+      ? `${topStressor.label} keeps the entry unsettled, and the stronger reaction does not fully resolve by the end.`
+      : `The entry carries a real reaction that stays unresolved rather than settling by the end.`;
+  } else if (timeline.arcMode === "mixed-but-stable") {
+    summary = topSupport && topStressor
+      ? `${topStressor.label} and ${topSupport.label} both matter here, and the entry holds that mixed state without forcing a dramatic turn.`
+      : `The entry holds more than one emotional thread at once, with mixed but meaningful movement rather than a simple before-and-after shift.`;
   } else if (reactiveWeight >= 2.1 && endState === reactionState) {
     summary = `The entry intensifies into ${reactionState}, and it lands there without much sign of resolution.`;
   } else if (watchfulWeight >= 1.8 && endState === reactionState) {
@@ -1800,14 +2298,16 @@ function synthesizeInterpretation(
     liminalWeight >= 2.4 ? "transition" : null,
     groundedWeight >= 1.8 && supports.some((item) => ["presence", "routine", "self-regulation"].includes(item.category)) ? "self-regulation" : null,
     supports.some((item) => item.category === "connection") ? "social connection" : null,
+    supports.some((item) => item.category === "environment") ? "supportive environment" : null,
     stressors.some((item) => item.category === "work") ? "work pressure" : null,
     stressors.some((item) => item.category === "finance") ? "financial strain" : null,
     stressors.some((item) => item.category === "family") ? "family concern" : null,
     stressors.some((item) => item.category === "relationship" || item.category === "conflict") ? "relationship strain" : null,
+    stressors.some((item) => item.label === "home safety scare") ? "home safety" : null,
     isMeaningfulDiscomfort(sentences.find((sentence) => /truth|honest|clarity|clearer|allow/i.test(sentence.sentence)) ?? sentences[0]) ? "emotional honesty" : null,
     watchfulWeight >= 1.8 ? "watchfulness" : null,
     reactiveWeight >= 1.8 ? "reactive strain" : null
-  ]).slice(0, 3);
+  ]).slice(0, 4);
 
   const themes = unique([
     supports.some((item) => item.category === "routine" || item.category === "presence") ? "self-regulation" : null,
@@ -1829,12 +2329,34 @@ function synthesizeInterpretation(
     ...getCentralSentences(sentences)
       .map((sentence) => sentence.sentence)
       .filter(isNotablePhraseCandidate)
-      .slice(0, 2),
+      .map((sentence) => ({ sentence, score: scoreNotablePhrase(sentence) }))
+      .sort((a, b) => b.score - a.score)
+      .filter((item) => item.score >= 1.7)
+      .slice(0, 2)
+      .map((item) => item.sentence),
     findMatch(entry, /maybe that'?s enough/i) || null,
     findMatch(entry, /didn't solve anything but felt more present/i) || null,
     findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null,
     analysisLikeCoreLine(entry)
-  ]).slice(0, 3);
+  ]).filter((phrase) => phrase && phrase.length <= 160).slice(0, 3);
+
+  const personalKeywords = unique([
+    ...supports.map((item) => normalizeSupportLabel(item.label, item.evidence, item.category)),
+    ...stressors.map((item) => normalizeStressorLabel(item.label, item.evidence, item.category)),
+    ...[
+      findMatch(entry, /\bMike\b/i),
+      findMatch(entry, /\bLily\b/i),
+      findMatch(entry, /\bbookstore\b/i),
+      findMatch(entry, /\bhome\b/i),
+      findMatch(entry, /\bquiet house\b/i),
+      findMatch(entry, /\bcoffee\b/i),
+      findMatch(entry, /\bdog\b/i)
+    ]
+  ])
+    .map((item) => compactSnippet(item ?? "", 3, 28).toLowerCase())
+    .filter((item, index, items) => Boolean(item) && items.indexOf(item) === index)
+    .filter((item) => isEligiblePersonalKeyword(item, item))
+    .slice(0, 5);
 
   return {
     summary,
@@ -1870,13 +2392,7 @@ function synthesizeInterpretation(
     },
     themes,
     recurringTopics,
-    personalKeywords: unique([
-      ...supports.map((item) => item.label).filter((item, index) => isEligiblePersonalKeyword(item, supports[index]?.evidence ?? "")),
-      ...stressors.map((item) => item.label).filter((item, index) => isEligiblePersonalKeyword(item, stressors[index]?.evidence ?? "")),
-      findMatch(entry, /maybe that'?s enough/i) || null,
-      findMatch(entry, /didn't solve anything but felt more present/i) || null,
-      findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null
-    ]).slice(0, 5),
+    personalKeywords,
     notableEntities: unique([
       findMatch(entry, /\bMike\b/i) || null,
       /\bdog\b/i.test(entry) ? "dog" : null,
@@ -2063,51 +2579,56 @@ function buildHeuristicAnalysis(rawText: string, userCheckIns?: UserCheckIns): J
   const supportsResult = detectSupportsAndCoping(rawText, eventsResult, stateResult);
   const stressorsResult = detectStressors(rawText, eventsResult, stateResult);
   const timeline = buildEmotionalTimeline(rawText, stateResult, supportsResult.supports, stressorsResult.stressors);
-  const interpretation = synthesizeInterpretation(rawText, eventsResult, stateResult, supportsResult, stressorsResult, timeline, userCheckIns);
   const safetyAssessment = detectSafetyAssessment(rawText);
+  const interpretation = applySafetySensitiveSuppression(
+    synthesizeInterpretation(rawText, eventsResult, stateResult, supportsResult, stressorsResult, timeline, userCheckIns),
+    safetyAssessment
+  );
 
   return applyCheckInGuardrailsToAnalysis(
-    validateAnalysis({
-    raw_text: rawText,
-    summary: interpretation.summary,
-    primary_emotion: interpretation.primaryEmotion,
-    secondary_emotions: interpretation.secondaryEmotions,
-    custom_emotion_terms: interpretation.customEmotionTerms,
-    joy_sources: interpretation.joySources,
-    gratitude_moments: interpretation.gratitudeMoments,
-    wins: interpretation.wins,
-    what_to_repeat: interpretation.whatToRepeat,
-    triggers: interpretation.triggers,
-    stressors: interpretation.stressors,
-    coping_actions: interpretation.copingActions,
-    supports: interpretation.supports,
-    sentiment: interpretation.sentiment,
-    user_mood: null,
-    user_stress: null,
-    user_energy: null,
-    mood_score: interpretation.moodScore,
-    stress_level: interpretation.stressLevel,
-    energy_level: interpretation.energyLevel,
-    energy_direction: interpretation.energyDirection,
-    emotional_shift: interpretation.emotionalShift,
-    themes: interpretation.themes,
-    recurring_topics: interpretation.recurringTopics,
-    personal_keywords: interpretation.personalKeywords,
-    notable_entities: interpretation.notableEntities,
-    restorative_signals: interpretation.restorativeSignals,
-    evidence_spans: [
-      ...interpretation.evidenceSpans,
-      ...safetyAssessment.evidence.map((item) => ({
-        text: item,
-        type: "safety" as const,
-        label: "safety"
-      }))
-    ],
-    notable_phrases: interpretation.notablePhrases,
-    reflection_tags: interpretation.reflectionTags,
-    confidence: interpretation.confidence,
-    safety_assessment: safetyAssessment
-    }),
+    applySafetySensitiveSuppressionToAnalysis(
+      validateAnalysis({
+        raw_text: rawText,
+        summary: interpretation.summary,
+        primary_emotion: interpretation.primaryEmotion,
+        secondary_emotions: interpretation.secondaryEmotions,
+        custom_emotion_terms: interpretation.customEmotionTerms,
+        joy_sources: interpretation.joySources,
+        gratitude_moments: interpretation.gratitudeMoments,
+        wins: interpretation.wins,
+        what_to_repeat: interpretation.whatToRepeat,
+        triggers: interpretation.triggers,
+        stressors: interpretation.stressors,
+        coping_actions: interpretation.copingActions,
+        supports: interpretation.supports,
+        sentiment: interpretation.sentiment,
+        user_mood: null,
+        user_stress: null,
+        user_energy: null,
+        mood_score: interpretation.moodScore,
+        stress_level: interpretation.stressLevel,
+        energy_level: interpretation.energyLevel,
+        energy_direction: interpretation.energyDirection,
+        emotional_shift: interpretation.emotionalShift,
+        themes: interpretation.themes,
+        recurring_topics: interpretation.recurringTopics,
+        personal_keywords: interpretation.personalKeywords,
+        notable_entities: interpretation.notableEntities,
+        restorative_signals: interpretation.restorativeSignals,
+        evidence_spans: [
+          ...interpretation.evidenceSpans,
+          ...safetyAssessment.evidence.map((item) => ({
+            text: item,
+            type: "safety" as const,
+            label: "safety"
+          }))
+        ],
+        notable_phrases: interpretation.notablePhrases,
+        reflection_tags: interpretation.reflectionTags,
+        confidence: interpretation.confidence,
+        safety_assessment: safetyAssessment
+      })
+    ),
     userCheckIns
   );
 }
@@ -2143,7 +2664,7 @@ async function callOpenAI(rawText: string, userCheckIns?: UserCheckIns): Promise
   });
 
   if (!response.ok) {
-    return { analysis: buildMockAnalysis(rawText), mode: "mock" };
+    return { analysis: buildMockAnalysis(rawText, userCheckIns), mode: "mock" };
   }
 
   const payload = await response.json();
@@ -2151,7 +2672,10 @@ async function callOpenAI(rawText: string, userCheckIns?: UserCheckIns): Promise
   const parsed = typeof content === "string" ? JSON.parse(content) : content;
 
   return {
-    analysis: applyCheckInGuardrailsToAnalysis(validateAnalysis(parsed), userCheckIns),
+    analysis: applyCheckInGuardrailsToAnalysis(
+      applySafetySensitiveSuppressionToAnalysis(validateAnalysis(parsed)),
+      userCheckIns
+    ),
     mode: "openai"
   };
 }
