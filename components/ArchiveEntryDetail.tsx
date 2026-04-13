@@ -248,8 +248,8 @@ export function ArchiveEntryDetail({
       ) : null}
 
       <div className="reveal-panel">
-        {patternContext ? <PatternContextPanel context={patternContext} basePath={readOnly ? "/demo/archive" : "/archive"} /> : null}
         <ResultsCard analysis={currentEntry.analysis} archiveBasePath={readOnly ? "/demo/archive" : "/archive"} />
+        {patternContext ? <PatternContextPanel context={patternContext} basePath={readOnly ? "/demo/archive" : "/archive"} /> : null}
       </div>
     </div>
   );

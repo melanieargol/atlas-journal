@@ -239,6 +239,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             </div>
           </article>
 
+          {!isModerateConcern ? (
           <article className="detail-panel reveal-panel">
             <SectionTitle
               title="Personal keywords"
@@ -254,6 +255,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
               )}
             </div>
           </article>
+          ) : null}
 
           {!isModerateConcern ? (
             <article className="detail-panel reveal-panel">
@@ -325,6 +327,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             </article>
           ) : null}
 
+          {!isModerateConcern ? (
           <article className="detail-panel reveal-panel">
             <SectionTitle
               title="Custom emotion language"
@@ -342,6 +345,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
               )}
             </div>
           </article>
+          ) : null}
         </div>
       )}
     </section>
