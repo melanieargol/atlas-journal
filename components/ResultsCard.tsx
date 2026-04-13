@@ -22,8 +22,11 @@ function SectionTitle({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="section-title-row">
       <p className="section-label">{title}</p>
-      <span className="section-hint" title={hint} aria-label={hint}>
-        i
+      <span className="section-hint" title={hint} aria-label={hint} tabIndex={0}>
+        <span aria-hidden="true">i</span>
+        <span className="section-tooltip" role="tooltip">
+          {hint}
+        </span>
       </span>
     </div>
   );
@@ -183,7 +186,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
           <article className="detail-panel reveal-panel">
             <SectionTitle
               title="Supports"
-              hint="External or environmental stabilizers: people, places, routines, comforts, or experiences that helped."
+              hint="What around you helped hold the moment."
             />
             <div className="stack-list">
               {analysis.supports.length > 0 ? (
@@ -207,7 +210,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
           <article className="detail-panel reveal-panel">
             <SectionTitle
               title="Coping actions"
-              hint="Intentional things the writer actively did to regulate, endure, orient, or move through the moment."
+              hint="What you intentionally did to move through the moment."
             />
             <div className="stack-list">
               {analysis.coping_actions.length > 0 ? (
@@ -226,7 +229,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
           <article className="detail-panel reveal-panel">
             <SectionTitle
               title="Entry topics"
-              hint="Concepts that appear central in this entry itself. Recurring patterns across time appear separately in pattern context."
+              hint="What this entry is mainly about."
             />
             <div className="tag-row">
               {analysis.recurring_topics.length > 0 ? (
@@ -261,7 +264,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             <article className="detail-panel reveal-panel">
               <SectionTitle
                 title="Restorative moments"
-                hint="Internal moments where the tone seems to soften toward grounding, clarity, release, awareness, or steadiness."
+                hint="Internal moments of settling, clarity, or grounding."
               />
               <div className="tag-row">
                 {analysis.restorative_signals.length > 0 ? (
@@ -281,7 +284,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             <article className="detail-panel reveal-panel">
               <SectionTitle
                 title="Evidence from the entry"
-                hint="The strongest phrases that actually support the promoted interpretation, not just surface-level detections."
+                hint="Lines that support why Atlas surfaced the interpretation."
               />
               <div className="stack-list">
                 {analysis.evidence_spans.length > 0 ? (
@@ -304,7 +307,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
           <article className="detail-panel reveal-panel">
               <SectionTitle
                 title="Themes and tags"
-                hint="Current-entry concepts that help group this entry with related moments in the archive."
+                hint="Broader ideas this entry connects to."
               />
               <div className="tag-row">
                 {mergedTags.map((item) => (
@@ -317,7 +320,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             <article className="detail-panel reveal-panel">
               <SectionTitle
                 title="Notable phrases"
-                hint="The line or lines that best capture the emotional core, symbolic center, or strongest insight of the entry."
+                hint="The line or two that best capture the entry's core energy."
               />
               <ul className="phrase-list">
                 {analysis.notable_phrases.map((phrase) => (

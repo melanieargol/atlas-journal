@@ -621,6 +621,7 @@ select {
 }
 
 .section-hint {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -632,6 +633,43 @@ select {
   color: var(--muted);
   font-size: 0.78rem;
   cursor: help;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.section-hint:hover,
+.section-hint:focus-visible {
+  border-color: rgba(245, 176, 76, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.section-tooltip {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 12;
+  width: min(260px, 72vw);
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(177, 187, 224, 0.16);
+  background: rgba(11, 16, 28, 0.96);
+  box-shadow: 0 20px 50px rgba(2, 6, 16, 0.42);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.section-hint:hover .section-tooltip,
+.section-hint:focus-visible .section-tooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .compact-head {

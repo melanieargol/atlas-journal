@@ -100,87 +100,6 @@ function formatCategoryLabel(value: string) {
     .join(" ");
 }
 
-function deriveStressors(
-  analysis: Record<string, unknown>,
-  triggers: JournalAnalysis["triggers"]
-): JournalAnalysis["stressors"] {
-  const stressors = collectValidItems(analysis.stressors, stressorSchema);
-
-  if (stressors.length > 0) {
-    return stressors;
-  }
-
-  return triggers.map((trigger) => ({
-    label: trigger.description,
-    category: trigger.type,
-    evidence: trigger.description,
-    intensity: clampNumber(analysis.stress_level, 1, 10, 5)
-  }));
-}
-
-function deriveSupports(
-  analysis: Record<string, unknown>,
-  copingActions: JournalAnalysis["coping_actions"]
-): JournalAnalysis["supports"] {
-  const supports = collectValidItems(analysis.supports, supportSchema);
-
-  if (supports.length > 0) {
-    return supports;
-  }
-
-  return copingActions
-    .filter((action) => action.impact === "helpful")
-    .map((action) => ({
-      label: action.action,
-      category: "routine",
-      evidence: action.action,
-      impact: "helpful" as const
-    }));
-}
-
-function deriveEvidenceSpans(
-  analysis: Record<string, unknown>,
-  customEmotionTerms: string[],
-  stressors: JournalAnalysis["stressors"],
-  supports: JournalAnalysis["supports"],
-  recurringTopics: string[],
-  safetyAssessment: JournalAnalysis["safety_assessment"]
-): JournalAnalysis["evidence_spans"] {
-  const evidenceSpans = collectValidItems(analysis.evidence_spans, evidenceSpanSchema);
-
-  if (evidenceSpans.length > 0) {
-    return evidenceSpans;
-  }
-
-  return [
-    ...customEmotionTerms.slice(0, 3).map((term) => ({
-      text: term,
-      type: "emotion" as const,
-      label: term
-    })),
-    ...stressors.slice(0, 3).map((item) => ({
-      text: item.evidence,
-      type: "stressor" as const,
-      label: item.label
-    })),
-    ...supports.slice(0, 3).map((item) => ({
-      text: item.evidence,
-      type: "support" as const,
-      label: item.label
-    })),
-    ...recurringTopics.slice(0, 3).map((topic) => ({
-      text: topic,
-      type: "topic" as const,
-      label: topic
-    })),
-    ...safetyAssessment.evidence.slice(0, 2).map((item) => ({
-      text: item,
-      type: "safety" as const,
-      label: "safety"
-    }))
-  ];
-}
-
 function normalizeAnalysis(input: unknown): JournalAnalysis | null {
   if (!input || typeof input !== "object") {
     return null;
@@ -192,11 +111,12 @@ function normalizeAnalysis(input: unknown): JournalAnalysis | null {
   const customEmotionTerms = sanitizeStringArray(analysis.custom_emotion_terms);
   const recurringTopics = sanitizeStringArray(analysis.recurring_topics);
   const safetyAssessment = safetyAssessmentSchema.catch(defaultSafetyAssessment).parse(analysis.safety_assessment);
-  const stressors = deriveStressors(analysis, triggers);
-  const supports = deriveSupports(analysis, copingActions);
+  const stressors = collectValidItems(analysis.stressors, stressorSchema);
+  const supports = collectValidItems(analysis.supports, supportSchema);
   const restorativeSignals = sanitizeStringArray(analysis.restorative_signals);
   const personalKeywords = sanitizeStringArray(analysis.personal_keywords);
   const notableEntities = sanitizeStringArray(analysis.notable_entities);
+  const evidenceSpans = collectValidItems(analysis.evidence_spans, evidenceSpanSchema);
 
   const normalized: JournalAnalysis = {
     raw_text: typeof analysis.raw_text === "string" ? analysis.raw_text : "",
@@ -233,33 +153,14 @@ function normalizeAnalysis(input: unknown): JournalAnalysis | null {
       })
       .parse(analysis.emotional_shift),
     themes: sanitizeStringArray(analysis.themes),
-    recurring_topics: recurringTopics.length > 0 ? recurringTopics : sanitizeStringArray(analysis.themes),
-    personal_keywords:
-      personalKeywords.length > 0
-        ? personalKeywords
-        : Array.from(
-            new Set([
-              ...stressors.map((item) => item.label),
-              ...supports.map((item) => item.label),
-              ...sanitizeStringArray(analysis.notable_phrases)
-            ])
-          ).slice(0, 8),
+    recurring_topics: recurringTopics,
+    personal_keywords: personalKeywords,
     notable_entities:
       notableEntities.length > 0
         ? notableEntities
         : Array.from(new Set([...stressors.map((item) => item.label), ...supports.map((item) => item.label)])).slice(0, 8),
-    restorative_signals:
-      restorativeSignals.length > 0
-        ? restorativeSignals
-        : Array.from(new Set([...sanitizeStringArray(analysis.what_to_repeat), ...supports.map((item) => item.label)])).slice(0, 8),
-    evidence_spans: deriveEvidenceSpans(
-      analysis,
-      customEmotionTerms,
-      stressors,
-      supports,
-      recurringTopics.length > 0 ? recurringTopics : sanitizeStringArray(analysis.themes),
-      safetyAssessment
-    ),
+    restorative_signals: restorativeSignals,
+    evidence_spans: evidenceSpans,
     notable_phrases: sanitizeStringArray(analysis.notable_phrases),
     reflection_tags: sanitizeStringArray(analysis.reflection_tags),
     confidence: confidenceSchema
