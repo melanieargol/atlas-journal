@@ -104,7 +104,6 @@ const conflictMarkers = [
   "hostile",
   "violent",
   "violence",
-  "hit",
   "punched",
   "punch",
   "slapped",
@@ -231,13 +230,14 @@ const stressorPatterns = [
   { category: "health", regex: /\b(rough night of sleep|didn't sleep|did not sleep|sleep|sick|pain|migraine)\b/i },
   { category: "family", regex: /\b(family|mom|dad|sister|brother|parent)\b/i },
   { category: "conflict", regex: /\b(argument|argued|fight|fighting|yelled|screamed|threatened|insulted|hostile|retaliation|revenge|worth it)\b/i },
-  { category: "harm", regex: /\b(punched|punch|slapped|slap|kicked|kick|hit|shoved|assault|hurt)\b/i },
+  { category: "harm", regex: /\b(punched|punch|slapped|slap|kicked|kick|shoved|assault|hurt)\b/i },
   { category: "relationship", regex: /\b(tone|partner|boyfriend|girlfriend|husband|wife|friend)\b/i },
   { category: "uncertainty", regex: /\b(uncertain|waiting|unknown|not sure|unsettled)\b/i }
 ] as const;
 
 type SentenceSignal = {
   sentence: string;
+  parentSentence: string;
   normalized: string;
   positionWeight: number;
   nonliteral: boolean;
@@ -245,6 +245,9 @@ type SentenceSignal = {
   conflict: boolean;
   restorativeCue: boolean;
   centralCue: boolean;
+  connector: string | null;
+  sentenceIndex: number;
+  roles: SegmentRole[];
   index: number;
 };
 
@@ -280,6 +283,18 @@ type UserCheckIns = {
   user_energy?: number | null;
 };
 
+type SegmentRole =
+  | "positive_event"
+  | "negative_event"
+  | "supportive_context"
+  | "intentional_coping"
+  | "internal_shift"
+  | "reflection"
+  | "atmosphere"
+  | "watchfulness_or_concern"
+  | "threat_or_harm"
+  | "mixed_segment";
+
 function includesAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
 }
@@ -299,26 +314,151 @@ function splitSentences(rawText: string) {
     .filter(Boolean);
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const clausePivotMarkers = [
+  "even though",
+  "rather than",
+  "although",
+  "though",
+  "because",
+  "instead",
+  "but",
+  "yet",
+  "still",
+  "when",
+  "while",
+  "after",
+  "before",
+  "later",
+  "then",
+  "so",
+  "and",
+  "except"
+] as const;
+
+const clauseVerbRegex =
+  /\b(i|we|he|she|they|it|my|our|was|were|am|is|are|did|do|does|felt|feel|made|make|got|get|went|go|came|come|sat|sit|let|noticed|notice|watched|watch|heard|hear|stayed|stay|slowed|slow|paused|pause|reached|reach|called|call|texted|text|journaled|journal|wrote|write|opened|open|found|find|thought|think|realized|realize|figured|figure|left|leave|took|take|walked|walk|ran|run|used|use|kept|keep|started|start|ended|end|turned|turn)\b/i;
+
+function shouldSplitOnConnector(connector: string, left: string, right: string) {
+  const leftWords = left.trim().split(/\s+/).length;
+  const rightWords = right.trim().split(/\s+/).length;
+
+  if (!left.trim() || !right.trim()) return false;
+  if (leftWords < 2 || rightWords < 2) return false;
+
+  if (connector === "and") {
+    return clauseVerbRegex.test(left) && clauseVerbRegex.test(right);
+  }
+
+  return true;
+}
+
+function findNextClausePivot(text: string) {
+  let best: { index: number; connector: string; length: number } | null = null;
+
+  for (const connector of clausePivotMarkers) {
+    const pattern = new RegExp(`(?:,\\s*|\\s+)${escapeRegex(connector)}\\s+`, "i");
+    const match = pattern.exec(text);
+
+    if (!match || typeof match.index !== "number") {
+      continue;
+    }
+
+    const left = text.slice(0, match.index).trim();
+    const right = text.slice(match.index + match[0].length).trim();
+
+    if (!shouldSplitOnConnector(connector, left, right)) {
+      continue;
+    }
+
+    if (!best || match.index < best.index) {
+      best = {
+        index: match.index,
+        connector,
+        length: match[0].length
+      };
+    }
+  }
+
+  return best;
+}
+
+function splitSentenceIntoSegments(sentence: string) {
+  const segments: Array<{ text: string; connector: string | null }> = [];
+  let remaining = sentence.trim();
+  let connector: string | null = null;
+  let guard = 0;
+
+  while (remaining && guard < 8) {
+    guard += 1;
+    const pivot = findNextClausePivot(remaining);
+
+    if (!pivot) {
+      segments.push({ text: remaining.trim(), connector });
+      break;
+    }
+
+    const left = remaining.slice(0, pivot.index).trim();
+    const right = remaining.slice(pivot.index + pivot.length).trim();
+
+    if (left) {
+      segments.push({ text: left, connector });
+    }
+
+    remaining = right;
+    connector = pivot.connector;
+  }
+
+  return segments.filter((segment) => segment.text.length > 0);
+}
+
 function isLikelyNonliteral(sentence: string) {
   const normalized = sentence.toLowerCase();
   return nonliteralMarkers.some((marker) => normalized.includes(marker));
 }
 
+function isNeutralHitContext(text: string) {
+  return /(light hit|sunlight hit|sound hit|music hit|it hit me|hit differently|hit the farmer'?s market|hit the bookstore|hit the mall|hit the market|hit the road)/i.test(
+    text
+  );
+}
+
+function isViolentHitContext(text: string) {
+  return (
+    /\bhit\b/i.test(text) &&
+    !isNeutralHitContext(text) &&
+    /\b(hit (me|him|her|them|someone)|was hit|got hit|hit [a-z]+ (hard|in the face|in the mouth|in the head)|they hit|he hit|she hit)\b/i.test(text)
+  );
+}
+
 function getSentenceSignals(rawText: string): SentenceSignal[] {
   const sentences = splitSentences(rawText);
+  const segments = sentences.flatMap((sentence, sentenceIndex) =>
+    splitSentenceIntoSegments(sentence).map((segment) => ({
+      ...segment,
+      parentSentence: sentence,
+      sentenceIndex
+    }))
+  );
 
-  return sentences.map((sentence, index) => {
-    const normalized = sentence.toLowerCase();
-    const hasCentralCue = /(felt|feeling|was|am|after|before|because|helped|steadier|calmer|drained|anxious|overwhelmed|hopeful)/i.test(sentence);
-    const positionWeight = index === 0 || index === sentences.length - 1 ? 1.15 : 1;
-    const nonliteral = isLikelyNonliteral(sentence);
-    const conflict = conflictMarkers.some((marker) => normalized.includes(marker));
+  return segments.map((segment, index) => {
+    const normalized = segment.text.toLowerCase();
+    const hasCentralCue = /(felt|feeling|was|am|after|before|because|helped|steadier|calmer|drained|anxious|overwhelmed|hopeful|realized|noticed)/i.test(
+      segment.text
+    );
+    const positionWeight = index === 0 || index === segments.length - 1 ? 1.15 : 1;
+    const nonliteral = isLikelyNonliteral(segment.parentSentence);
+    const conflict = conflictMarkers.some((marker) => normalized.includes(marker)) || isViolentHitContext(segment.text);
     const restorativeCue =
       restorativeOutcomeMarkers.some((marker) => normalized.includes(marker)) ||
       supportIntentMarkers.some((marker) => normalized.includes(marker));
 
-    return {
-      sentence,
+    const signal: SentenceSignal = {
+      sentence: segment.text,
+      parentSentence: segment.parentSentence,
       normalized,
       index,
       positionWeight: hasCentralCue ? positionWeight * 1.1 : positionWeight,
@@ -326,8 +466,14 @@ function getSentenceSignals(rawText: string): SentenceSignal[] {
       emotionalWeight: nonliteral ? 0.45 : 1,
       conflict,
       restorativeCue,
-      centralCue: hasCentralCue
+      centralCue: hasCentralCue,
+      connector: segment.connector,
+      sentenceIndex: segment.sentenceIndex,
+      roles: []
     };
+
+    signal.roles = classifySegmentRoles(signal);
+    return signal;
   });
 }
 
@@ -345,7 +491,11 @@ function hasAny(sentence: SentenceSignal, markers: readonly string[]) {
 }
 
 function isConflict(sentence: SentenceSignal) {
-  return sentence.conflict || /(argued|argument|fight|fighting|hostile|insulted|retaliat|threat|yelled|screamed|punched|punch|slapped|slap|kicked|kick|assault|worth it)/i.test(sentence.sentence);
+  return (
+    sentence.conflict ||
+    /(argued|argument|fight|fighting|hostile|insulted|retaliat|threat|yelled|screamed|punched|punch|slapped|slap|kicked|kick|assault|worth it)/i.test(sentence.sentence) ||
+    isViolentHitContext(sentence.sentence)
+  );
 }
 
 function hasGentleRegulation(sentence: SentenceSignal) {
@@ -409,7 +559,7 @@ function isWeakEntityLabel(label: string) {
 }
 
 function isWatchfulEmotion(label: string) {
-  return ["concerned", "suspicious", "watchful", "vigilant", "curious", "investigative", "alarmed", "fearful", "uneasy", "unsettled"].includes(
+  return ["concerned", "suspicious", "watchful", "vigilant", "curious", "investigative", "alarmed", "fearful", "uneasy"].includes(
     label
   );
 }
@@ -418,6 +568,52 @@ function hasConcernContext(text: string) {
   return /(checking|watching|waiting|trying to find out|trying to understand|trying to figure out|keeping an eye|felt off|something felt off|not sure|unsure|concerned|worried|suspicious|don't trust|do not trust|alert)/i.test(
     text
   );
+}
+
+function classifySegmentRoles(segment: SentenceSignal) {
+  const roles = new Set<SegmentRole>();
+  const text = segment.sentence;
+  const contextText = segment.parentSentence;
+
+  if (hasPositiveExperience(segment)) roles.add("positive_event");
+  if (hasGentleRegulation(segment) && !hasNegativeContext(segment)) roles.add("supportive_context");
+  if (/(didn't rush|did not rush|took my time|slowed down|paused|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|journaled|wrote it down|reached out|went for a walk|took a walk)/i.test(text)) {
+    roles.add("intentional_coping");
+  }
+  if (
+    hasInternalShiftLanguage(text) ||
+    /not empty.*still|stayed long enough to notice|could breathe|no pressure to fix|no pressure to prove|no pressure to carry/i.test(contextText)
+  ) {
+    roles.add("internal_shift");
+  }
+  if (isMeaningfulDiscomfort(segment) || /(realized|clarity|clearer|truth|honest|because|maybe that's enough)/i.test(text)) {
+    roles.add("reflection");
+  }
+  if (/\b(still|quiet|light|sunlight|sound|birds|wind|kitchen counter|counter|room|house)\b/i.test(text) && !indicatesActualStrain(segment)) {
+    roles.add("atmosphere");
+  }
+  if (hasConcernContext(text) && !indicatesActualStrain(segment)) {
+    roles.add("watchfulness_or_concern");
+  }
+  if (
+    isConflict(segment) ||
+    isViolentHitContext(text) ||
+    /(unsafe|threat|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched|violent|assault)/i.test(
+      contextText
+    )
+  ) {
+    roles.add("threat_or_harm");
+  }
+  if (indicatesActualStrain(segment) || hasDisruptionSignal(segment)) roles.add("negative_event");
+
+  if (
+    (roles.has("positive_event") || roles.has("supportive_context")) &&
+    (roles.has("negative_event") || roles.has("threat_or_harm") || roles.has("watchfulness_or_concern"))
+  ) {
+    roles.add("mixed_segment");
+  }
+
+  return Array.from(roles);
 }
 
 function compactSnippet(text: string, maxWords = 4, maxChars = 34) {
@@ -437,13 +633,13 @@ function compactSnippet(text: string, maxWords = 4, maxChars = 34) {
 }
 
 function sanitizePersonalKeywordFinal(value: string, safetyLevel: JournalAnalysis["safety_assessment"]["level"]) {
-  const compact = compactSnippet(value, 3, 32).toLowerCase();
+  const compact = compactSnippet(value, 3, 28).toLowerCase();
 
   if (!compact) return "";
   if (isSafetySensitiveText(compact) && safetyLevel !== "none") return "";
   if (/[.!?;:,()]/.test(value)) return "";
   if (compact.split(/\s+/).length > 3) return "";
-  if (compact.length > 32) return "";
+  if (compact.length > 28) return "";
   if (
     /^(i|it|this|that|there|maybe|because|then|after|before|when|while|even|just|really|kind of|sort of)\b/i.test(compact) ||
     /\b(i|it|this|that|there|because|when|while|then|after|before)\b.*\b(i|it|this|that|there|because|when|while|then|after|before)\b/i.test(compact)
@@ -457,6 +653,221 @@ function sanitizePersonalKeywordFinal(value: string, safetyLevel: JournalAnalysi
 function getCopingEvidenceText(item: JournalAnalysis["coping_actions"][number]) {
   const internal = item as JournalAnalysis["coping_actions"][number] & { evidence?: string };
   return internal.evidence ?? item.action;
+}
+
+function getSegmentContextText(segment: SentenceSignal) {
+  return segment.parentSentence || segment.sentence;
+}
+
+function inferSupportCategoryFromText(text: string) {
+  if (/\b(friend|friends|family|mom|dad|sister|brother|parent|partner|coworker)\b/i.test(text)) return "connection";
+  if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|sunlight|outside|fresh air|quiet house|house was still|house was quiet|quiet room)\b/i.test(text)) {
+    return "environment";
+  }
+  if (/\b(dog|dogs)\b/i.test(text)) return "comfort";
+  if (/\b(gym|worked out|workout|walked|went for a walk|took a walk|ran|run|stretch|outside)\b/i.test(text)) return "movement";
+  if (/\b(food|meal|breakfast|lunch|dinner|coffee|tea)\b/i.test(text)) return "routine";
+  return "presence";
+}
+
+function inferSupportCandidateFromSentence(sentence: SentenceSignal): JournalAnalysis["supports"][number] | null {
+  const contextText = getSegmentContextText(sentence);
+
+  if (!sentence.roles.some((role) => role === "supportive_context" || role === "positive_event")) {
+    return null;
+  }
+
+  if (hasNegativeContext(sentence) && !allowsDualValence(sentence)) {
+    return null;
+  }
+
+  if (
+    !/\b(friend|friends|family|mom|dad|sister|brother|parent|partner|coworker|coffee|tea|meal|breakfast|lunch|dinner|quiet house|house was still|house was quiet|quiet room|sunlight|outside|fresh air|music|playlist|song|songs|dog|bookstore|book shop|library|cafe|restaurant|park|porch|gym|worked out|workout|walked|went for a walk|took a walk)\b/i.test(
+      contextText
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    !sentence.roles.includes("supportive_context") &&
+    !/(great time|good time|enjoyed|enjoyable|comfort|comforting|helped|steadier|calmer|felt better|felt okay|felt more okay|warm|kind|soft|quiet|still)/i.test(contextText)
+  ) {
+    return null;
+  }
+
+  const category = inferSupportCategoryFromText(contextText);
+  const seed =
+    findMatch(
+      contextText,
+      /\b(friend|friends|family|coffee|tea|meal|breakfast|lunch|dinner|quiet house|house was still|house was quiet|quiet room|sunlight|outside|fresh air|music|playlist|song|songs|dog|bookstore|book shop|library|cafe|restaurant|park|porch|gym|worked out|workout|walked|went for a walk|took a walk)\b/i
+    ) || category;
+
+  const label = normalizeSupportLabel(seed, contextText, category);
+
+  if (!label) {
+    return null;
+  }
+
+  return {
+    label,
+    category,
+    evidence: contextText,
+    impact: classifySupportImpact(sentence)
+  };
+}
+
+function inferCopingCategoryFromText(text: string) {
+  if (/\b(walk|walked|went for a walk|took a walk|gym|worked out|workout|run|ran|stretch|outside)\b/i.test(text)) return "movement";
+  if (/\b(called|texted|talked to|talked with|reached out|asked for help)\b/i.test(text)) return "connection";
+  if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(text)) return "self-regulation";
+  if (/\b(coffee|tea|meal|breakfast|lunch|dinner|made|brewed|prepared|cooked)\b/i.test(text)) return "routine";
+  if (/\b(breathe|breathing|breath)\b/i.test(text)) return "body care";
+  return "presence";
+}
+
+function inferCopingCandidateFromSentence(sentence: SentenceSignal): (JournalAnalysis["coping_actions"][number] & { label: string; evidence: string }) | null {
+  const contextText = getSegmentContextText(sentence);
+
+  if (
+    !sentence.roles.includes("intentional_coping") &&
+    !/(didn't rush|did not rush|took my time|slowed down|paused|pause|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|went for a walk|took a walk|reached out|called|texted|journaled|wrote it down|breathed|breathing|made coffee|made tea|prepared)/i.test(
+      contextText
+    )
+  ) {
+    return null;
+  }
+
+  const category = inferCopingCategoryFromText(contextText);
+  const action = describeCopingAction(compactSnippet(contextText, 6, 52), contextText, category);
+
+  if (!action || action.length > 52) {
+    return null;
+  }
+
+  return {
+    label: action,
+    evidence: contextText,
+    action,
+    impact: (/breath|present|steady|didn't rush|did not rush|took my time|slowed down|let it be|sat with|stayed with|paused/i.test(contextText)
+      ? "grounding"
+      : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
+  };
+}
+
+function inferConceptualStressorEvent(sentence: SentenceSignal): EventSignal | null {
+  const contextText = getSegmentContextText(sentence);
+
+  if (!sentence.roles.some((role) => role === "negative_event" || role === "watchfulness_or_concern" || role === "threat_or_harm")) {
+    return null;
+  }
+
+  if (
+    !indicatesActualStrain(sentence) &&
+    !sentence.roles.includes("threat_or_harm") &&
+    !/(unsafe|scared|afraid|wrong|off|pressure|burden|heavy|too much|overload|looming|gnawing|haunting|unlatched|unlocked|open|bark|barking|tension|conflict|fight|threat)/i.test(
+      contextText
+    )
+  ) {
+    return null;
+  }
+
+  let label = "destabilizing strain";
+  let category = "disruption";
+
+  if (/\b(punched|punch|slapped|slap|kicked|kick|shoved|assault|hurt)\b/i.test(contextText) || isViolentHitContext(contextText)) {
+    label = "physical aggression";
+    category = "harm";
+  } else if (/\b(door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)\b/i.test(contextText)) {
+    label = "home safety scare";
+    category = "uncertainty";
+  } else if (/\b(dog|dogs)\b/i.test(contextText) && /\b(bark|barking|wouldn't stop|would not stop|kept barking)\b/i.test(contextText)) {
+    label = "dog barking disruption";
+    category = "disruption";
+  } else if (/\b(refund|money|budget|bills?|rent|finance)\b/i.test(contextText)) {
+    label = "financial strain";
+    category = "finance";
+  } else if (/\b(deadline|manager|meeting|work|shift)\b/i.test(contextText)) {
+    label = "work pressure";
+    category = "work";
+  } else if (/\b(sister|brother|mom|dad|family|parent)\b/i.test(contextText) && /(worried|concerned|scared|off|waiting|not sure|unsafe)/i.test(contextText)) {
+    label = "family concern";
+    category = "family";
+  } else if (/\b(friend|partner|wife|husband|boyfriend|girlfriend|mike)\b/i.test(contextText) && /(argued|fight|hostile|insult|yelled|threat|off|unsafe)/i.test(contextText)) {
+    label = "relationship conflict";
+    category = "conflict";
+  } else if (/\b(overload|overloaded|too much|pressure|heavy|burden|carrying|carry)\b/i.test(contextText)) {
+    label = "overload";
+    category = "pressure";
+  } else if (sentence.roles.includes("watchfulness_or_concern")) {
+    label = "costly uncertainty";
+    category = "uncertainty";
+  }
+
+  return {
+    label,
+    category,
+    evidence: contextText,
+    kind: "stressor",
+    weight: scoreSentenceStrength(sentence) + (sentence.roles.includes("threat_or_harm") ? 0.95 : 0.55),
+    positive: 0,
+    negative: sentence.roles.includes("threat_or_harm") ? 2.1 : 1.6,
+    index: sentence.index
+  };
+}
+
+function getSegmentRoleWeights(segment: SentenceSignal[]) {
+  return segment.reduce(
+    (totals, sentence) => {
+      const base = scoreSentenceStrength(sentence);
+
+      if (sentence.roles.includes("positive_event")) totals.positive += base * 0.9;
+      if (sentence.roles.includes("supportive_context")) totals.supportive += base * 0.95;
+      if (sentence.roles.includes("intentional_coping")) totals.coping += base * 1;
+      if (sentence.roles.includes("internal_shift")) totals.internalShift += base * 1.1;
+      if (sentence.roles.includes("reflection")) totals.reflection += base * 0.75;
+      if (sentence.roles.includes("atmosphere")) totals.atmosphere += base * 0.45;
+      if (sentence.roles.includes("watchfulness_or_concern")) totals.concern += base * 1;
+      if (sentence.roles.includes("threat_or_harm")) totals.threat += base * 1.2;
+      if (sentence.roles.includes("negative_event")) totals.negative += base * 0.85;
+      if (sentence.roles.includes("mixed_segment")) totals.mixed += base * 0.75;
+
+      return totals;
+    },
+    {
+      positive: 0,
+      supportive: 0,
+      coping: 0,
+      internalShift: 0,
+      reflection: 0,
+      atmosphere: 0,
+      concern: 0,
+      threat: 0,
+      negative: 0,
+      mixed: 0
+    }
+  );
+}
+
+function keywordFromPromotedItem(label: string) {
+  const normalized = normalizeConceptLabel(label);
+
+  if (normalized === "small ritual") return "coffee";
+  if (normalized === "bookstore outing") return "bookstore";
+  if (normalized === "dog presence" || normalized === "dog walk") return "dog";
+  if (normalized === "quiet house" || normalized === "quiet environment" || normalized === "home safety scare") return "home";
+  if (normalized === "financial strain") return "money";
+  if (normalized === "work pressure") return "work";
+  if (normalized === "meal at home" || normalized === "food at home") return "meal";
+  if (normalized === "gym session") return "gym";
+
+  return "";
+}
+
+function collectCapitalizedAnchors(text: string) {
+  return Array.from(text.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b/g))
+    .map((match) => match[0])
+    .filter((value) => !/^(I|It|The|This|That|When|While|After|Before|Later|Today|Atlas|Journal)$/i.test(value));
 }
 
 function normalizeSupportLabel(label: string, evidence: string, category: string) {
@@ -494,7 +905,7 @@ function normalizeSupportLabel(label: string, evidence: string, category: string
 function normalizeStressorLabel(label: string, evidence: string, category: string) {
   const normalized = normalizePromotedConcept(label, evidence, "stressor");
 
-  if (/\b(punched|punch|slapped|slap|kicked|kick|hit|shoved|assault)\b/i.test(evidence)) {
+  if (/\b(punched|punch|slapped|slap|kicked|kick|shoved|assault)\b/i.test(evidence) || isViolentHitContext(evidence)) {
     return "physical aggression";
   }
 
@@ -573,13 +984,32 @@ function isEligibleSupportCandidate(event: EventSignal, sentence: SentenceSignal
 }
 
 function isEligiblePersonalKeyword(label: string, evidence: string) {
-  const normalized = compactSnippet(label, 3, 32).toLowerCase();
-  if (normalized.length < 4 || isWeakEntityLabel(normalized)) return false;
+  const normalized = compactSnippet(label, 3, 28).toLowerCase();
+  if (normalized.length < 3) return false;
   if (!/[a-z]/i.test(normalized)) return false;
   if (normalized.split(/\s+/).length > 3) return false;
   if (/[.?!]/.test(label)) return false;
-  if (/^(present|steady|transition|acceptance|movement|connection|resolution|pressure|disruption|conflict|watchfulness|self-regulation|emotional honesty|reactive strain|supportive environment|clarifying|mixed recovery|grounded|relieved|activated|reactive)$/.test(normalized)) return false;
-  if (normalized.split(/\s+/).length === 1 && !/(call|walk|coffee|home|money|sleep|truth|clarity|rush|present|enough)/i.test(normalized) && !evidence.toLowerCase().includes(normalized)) {
+  if (
+    /^(present|steady|transition|acceptance|movement|connection|resolution|pressure|disruption|conflict|watchfulness|self-regulation|emotional honesty|reactive strain|supportive environment|clarifying|mixed recovery|grounded|relieved|activated|reactive|burdened|supported|settling|mixed|unresolved)$/.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  if (/\b(i|it|this|that|because|when|while|after|before|then|later)\b/i.test(normalized) && normalized.split(/\s+/).length > 1) return false;
+  if (
+    normalized.split(/\s+/).length === 1 &&
+    !/(mike|lily|home|work|sister|brother|mom|dad|family|manager|coffee|tea|dog|bookstore|laundromat|money|sleep|gym|mall|market|door|kitchen|music|meal|studio)/i.test(
+      normalized
+    ) &&
+    !evidence.toLowerCase().includes(normalized)
+  ) {
+    return false;
+  }
+  if (
+    normalized.split(/\s+/).length > 1 &&
+    !/(call|door|market|coffee|tea|routine|house|home|work|studio|bookstore|dog|meal|family|friend|gym|front|morning)/i.test(normalized)
+  ) {
     return false;
   }
 
@@ -981,7 +1411,7 @@ function isEvidenceLabelMatch(label: string, evidence: string) {
   }
 
   if (normalizedLabel === "physical aggression") {
-    return /(punched|punch|slapped|slap|kicked|kick|hit|shoved|assault|hurt)/i.test(evidence);
+    return /(punched|punch|slapped|slap|kicked|kick|shoved|assault|hurt)/i.test(evidence) || isViolentHitContext(evidence);
   }
 
   if (normalizedLabel === "threatening situation") {
@@ -1067,7 +1497,7 @@ function dedupeByLabelAndEvidence<T extends { label: string; evidence: string }>
 }
 
 function isReactiveEmotion(label: string) {
-  return ["angry", "rageful", "hostile", "resentful", "spiteful", "vindicated", "disgusted", "alarmed", "fearful"].includes(label);
+  return ["angry", "rageful", "hostile", "resentful", "spiteful", "vindicated", "disgusted", "alarmed", "fearful", "reactive"].includes(label);
 }
 
 function getStateWeights(signals: StateSignal[]) {
@@ -1114,7 +1544,14 @@ function getSignalScore(signal: StateSignal, sentences: SentenceSignal[], allSig
   const sentence = sentences.find((item) => item.index === signal.index);
   const sameLabelCount = allSignals.filter((item) => item.label === signal.label).length;
   const sentenceCount = Math.max(sentences.length - 1, 1);
-  const intensity = clamp(signal.weight / 2.4, 0.4, 3);
+  const genericPenalty = ["present", "steady", "unsettled"].includes(signal.label) ? 0.82 : 1;
+  const specificBoost =
+    ["grounded", "clarifying", "watchful", "concerned", "fearful", "angry", "hostile", "overwhelmed", "grieving", "accepting", "relieved", "hopeful", "emotionally honest", "activated", "reactive", "burdened"].includes(
+      signal.label
+    )
+      ? 1.08
+      : 1;
+  const intensity = clamp((signal.weight / 2.4) * genericPenalty * specificBoost, 0.35, 3);
   const repetition = clamp(sameLabelCount, 1, 4);
   const position = clamp(((signal.index ?? 0) / sentenceCount) * 3, 0.8, 3);
   const emphasis = clamp(
@@ -1122,9 +1559,9 @@ function getSignalScore(signal: StateSignal, sentences: SentenceSignal[], allSig
       (/[!?]/.test(signal.evidence) ? 0.7 : 0) +
       (sentence?.restorativeCue ? 0.4 : 0) +
       (sentence?.conflict ? 0.5 : 0),
-    0.6,
+    0.55,
     3
-  );
+  ) * genericPenalty;
 
   return { intensity, repetition, position, emphasis };
 }
@@ -1717,21 +2154,23 @@ function extractEvents(entry: string) {
   const events: EventSignal[] = [];
 
   for (const sentence of sentences) {
+    const contextText = getSegmentContextText(sentence);
     const gentleRegulation = hasGentleRegulation(sentence);
     const explicitRelief = hasRestorativeOutcome(sentence);
     const positiveExperience = hasPositiveExperience(sentence);
     const negativeContext = hasNegativeContext(sentence);
+    const stressorCountBefore = events.length;
     const liminalWithoutDistress =
       liminalMarkers.some((marker) => sentence.normalized.includes(marker)) &&
       !negativeContext &&
       !hasDisruptionSignal(sentence) &&
       !/(panic|terrified|unsafe|argument|fight|threat|rage|furious)/i.test(sentence.sentence);
 
-    if (/(made|brewed).*(coffee|tea)|(coffee|tea).*(slowly|quietly|didn't rush|did not rush|took my time)/i.test(sentence.sentence) && !negativeContext) {
+    if (/(made|brewed).*(coffee|tea)|(coffee|tea).*(slowly|quietly|didn't rush|did not rush|took my time)/i.test(contextText) && !negativeContext) {
       events.push({
         label: "made coffee slowly",
         category: "routine",
-        evidence: sentence.sentence,
+        evidence: contextText,
         kind: "support",
         weight: scoreSentenceStrength(sentence) + 0.8,
         positive: 2.3,
@@ -1744,21 +2183,21 @@ function extractEvents(entry: string) {
       events.push({
         label: "noticed the environment",
         category: "presence",
-        evidence: sentence.sentence,
-        kind: gentleRegulation ? "support" : "neutral",
+        evidence: contextText,
+        kind: sentence.roles.includes("supportive_context") ? "support" : "neutral",
         weight: scoreSentenceStrength(sentence) + 0.5,
-        positive: gentleRegulation ? 1.8 : 0.3,
+        positive: sentence.roles.includes("supportive_context") ? 1.8 : 0.3,
         negative: 0,
         index: sentence.index
       });
     }
 
-    if (/(didn't rush|did not rush|took my time|slowed down|slowly|quietly|maybe that's enough|more present|sat with it|let it be)/i.test(sentence.sentence) && !negativeContext) {
+    if (sentence.roles.includes("intentional_coping") && !negativeContext) {
       events.push({
         label: findMatch(sentence.sentence, /didn't rush|did not rush|took my time|slowed down|slowly|quietly|maybe that's enough|more present|sat with it|let it be/i) || "intentional slowing",
-        category: "presence",
-        evidence: sentence.sentence,
-        kind: "support",
+        category: "self-regulation",
+        evidence: contextText,
+        kind: /(coffee|tea|house was still|house was quiet|quiet house|sunlight|music|dog)/i.test(contextText) ? "support" : "neutral",
         weight: scoreSentenceStrength(sentence) + 0.8,
         positive: 2,
         negative: 0,
@@ -1779,11 +2218,11 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(house was still|house was quiet|quiet room|quiet house)\b/i.test(sentence.sentence) && !negativeContext) {
+    if (sentence.roles.includes("supportive_context") && /\b(house was still|house was quiet|quiet room|quiet house)\b/i.test(contextText) && !negativeContext) {
       events.push({
-        label: findMatch(sentence.sentence, /\b(house was still|house was quiet|quiet room|quiet house)\b/i) || "quiet environment",
+        label: findMatch(contextText, /\b(house was still|house was quiet|quiet room|quiet house)\b/i) || "quiet environment",
         category: "environment",
-        evidence: sentence.sentence,
+        evidence: contextText,
         kind: gentleRegulation || explicitRelief ? "support" : "neutral",
         weight: scoreSentenceStrength(sentence) + 0.55,
         positive: gentleRegulation || explicitRelief ? 1.8 : 0.7,
@@ -1792,11 +2231,11 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\bdog\b/i.test(sentence.sentence) && /(nearby|next to me|beside me|with me|curled up|quiet|calm)/i.test(sentence.sentence) && !negativeContext) {
+    if (sentence.roles.includes("supportive_context") && /\bdog\b/i.test(contextText) && /(nearby|next to me|beside me|with me|curled up|quiet|calm)/i.test(contextText) && !negativeContext) {
       events.push({
         label: "dog presence",
         category: "comfort",
-        evidence: sentence.sentence,
+        evidence: contextText,
         kind: gentleRegulation || explicitRelief ? "support" : "neutral",
         weight: scoreSentenceStrength(sentence) + 0.5,
         positive: gentleRegulation || explicitRelief ? 1.7 : 0.65,
@@ -1805,11 +2244,11 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i.test(sentence.sentence) && (positiveExperience || explicitRelief || gentleRegulation) && !negativeContext) {
+    if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i.test(contextText) && (positiveExperience || explicitRelief || gentleRegulation || sentence.roles.includes("supportive_context")) && !negativeContext) {
       events.push({
-        label: findMatch(sentence.sentence, /\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i) || "supportive environment",
+        label: findMatch(contextText, /\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i) || "supportive environment",
         category: "environment",
-        evidence: sentence.sentence,
+        evidence: contextText,
         kind: "support",
         weight: scoreSentenceStrength(sentence) + 0.55,
         positive: 1.9,
@@ -1818,11 +2257,11 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(music|playlist|song|songs)\b/i.test(sentence.sentence) && (positiveExperience || explicitRelief || gentleRegulation) && !negativeContext) {
+    if (/\b(music|playlist|song|songs)\b/i.test(contextText) && (positiveExperience || explicitRelief || gentleRegulation || sentence.roles.includes("supportive_context")) && !negativeContext) {
       events.push({
-        label: findMatch(sentence.sentence, /\b(music|playlist|song|songs)\b/i) || "music",
+        label: findMatch(contextText, /\b(music|playlist|song|songs)\b/i) || "music",
         category: "comfort",
-        evidence: sentence.sentence,
+        evidence: contextText,
         kind: "support",
         weight: scoreSentenceStrength(sentence) + 0.45,
         positive: 1.7,
@@ -1831,11 +2270,11 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(sentence.sentence) && (positiveExperience || gentleRegulation || explicitRelief) && !negativeContext) {
+    if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(contextText) && (positiveExperience || gentleRegulation || explicitRelief || sentence.roles.includes("supportive_context")) && !negativeContext) {
       events.push({
-        label: findMatch(sentence.sentence, /\b(food|meal|breakfast|lunch|dinner)\b/i) || "meal",
+        label: findMatch(contextText, /\b(food|meal|breakfast|lunch|dinner)\b/i) || "meal",
         category: "routine",
-        evidence: sentence.sentence,
+        evidence: contextText,
         kind: "support",
         weight: scoreSentenceStrength(sentence) + 0.45,
         positive: 1.6,
@@ -1844,12 +2283,12 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(sentence.sentence) && !negativeContext) {
+    if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(contextText) && !negativeContext) {
       events.push({
         label: "journaled it out",
         category: "self-regulation",
-        evidence: sentence.sentence,
-        kind: "support",
+        evidence: contextText,
+        kind: "neutral",
         weight: scoreSentenceStrength(sentence) + 0.5,
         positive: 1.5,
         negative: 0,
@@ -1897,8 +2336,10 @@ function extractEvents(entry: string) {
     }
 
     const explicitStressorMatch =
-      /(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it)/i.test(sentence.sentence) &&
-      !isNegatedOrQualified(sentence, /\b(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it)\b/i);
+      ((/(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)/i.test(
+        contextText
+      ) || isViolentHitContext(contextText)) &&
+      !isNegatedOrQualified(sentence, /\b(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)\b/i));
 
     if (!liminalWithoutDistress && (isConflict(sentence) || explicitStressorMatch || (hasDisruptionSignal(sentence) && indicatesActualStrain(sentence)))) {
       const category = isConflict(sentence)
@@ -1909,15 +2350,17 @@ function extractEvents(entry: string) {
             ? "work"
             : /(migraine|pain|sleep|sick)/i.test(sentence.sentence)
               ? "health"
-              : /(punched|punch|slapped|slap|kicked|kick|assault|hit|shoved)/i.test(sentence.sentence)
+              : /(punched|punch|slapped|slap|kicked|kick|assault|shoved)/i.test(contextText) || isViolentHitContext(contextText)
                 ? "harm"
+              : /(door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)/i.test(contextText)
+                ? "uncertainty"
               : /(pressure|overloaded|overload)/i.test(sentence.sentence)
                 ? "pressure"
                 : "disruption";
       const label =
         findMatch(
-          sentence.sentence,
-          /argument|argued|fight|fighting|yelled|screamed|threatened|hostile|insulted|punched|punch|slapped|slap|kicked|kick|assault|refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|caught me off guard|felt unsafe|something was wrong|got weird|went wrong|flat tire|car trouble|missed the train|alarm|uncomfortable|unsafe|scared|awkward|revenge|worth it/i
+          contextText,
+          /argument|argued|fight|fighting|yelled|screamed|threatened|hostile|insulted|punched|punch|slapped|slap|kicked|kick|assault|refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|caught me off guard|felt unsafe|something was wrong|got weird|went wrong|flat tire|car trouble|missed the train|alarm|uncomfortable|unsafe|scared|awkward|revenge|worth it|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched/i
         ) || category;
 
       if (!isNegatedOrQualified(sentence, new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"))) {
@@ -1933,6 +2376,13 @@ function extractEvents(entry: string) {
         });
       }
     }
+
+    if (events.length === stressorCountBefore) {
+      const inferredStressor = inferConceptualStressorEvent(sentence);
+      if (inferredStressor) {
+        events.push(inferredStressor);
+      }
+    }
   }
 
   return { sentences, events };
@@ -1943,12 +2393,14 @@ function extractStateSignals(entry: string) {
   const signals: StateSignal[] = [];
 
   for (const sentence of sentences) {
+    const contextText = getSegmentContextText(sentence);
+
     for (const descriptor of explicitEmotionLexicon) {
-      if (descriptor.regex.test(sentence.sentence) && !isNegatedOrQualified(sentence, descriptor.regex)) {
+      if (descriptor.regex.test(contextText) && !isNegatedOrQualified(sentence, descriptor.regex)) {
         signals.push({
           label: descriptor.label,
           tone: descriptor.tone,
-          evidence: sentence.sentence,
+          evidence: contextText,
           weight: descriptor.score * scoreSentenceStrength(sentence),
           index: sentence.index
         });
@@ -1959,122 +2411,175 @@ function extractStateSignals(entry: string) {
       signals.push({
         label: sentence.normalized.includes("maybe that's enough") ? "accepting" : "transitional",
         tone: sentence.normalized.includes("maybe that's enough") ? "grounded" : "liminal",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 2.2 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (sentence.roles.includes("threat_or_harm")) {
+      signals.push({
+        label:
+          /(unsafe|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched|scared|afraid|terrified|wrong)/i.test(
+            contextText
+          )
+            ? "fearful"
+            : isConflict(sentence)
+              ? "reactive"
+              : "burdened",
+        tone: "negative",
+        evidence: contextText,
+        weight: 2.15 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (sentence.roles.includes("watchfulness_or_concern") && !isConflict(sentence) && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: /(trying to find out|looking into|investigat|waiting for information)/i.test(contextText)
+          ? "investigative"
+          : /(suspicious|don't trust|do not trust|something felt off)/i.test(contextText)
+            ? "suspicious"
+            : /(watchful|keeping an eye|on guard)/i.test(contextText)
+              ? "watchful"
+              : /(vigilant|alert)/i.test(contextText)
+                ? "vigilant"
+                : "concerned",
+        tone: /(curious|wondering|trying to understand)/i.test(contextText) ? "liminal" : "negative",
+        evidence: contextText,
+        weight: 1.75 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (sentence.roles.includes("internal_shift") && !hasNegativeContext(sentence)) {
+      signals.push({
+        label: /clarity|clearer|truth|honest/i.test(contextText)
+          ? "clarifying"
+          : /relieved|lighter|eased|release/i.test(contextText)
+            ? "relieved"
+            : /felt more present|more present|noticed|aware|awareness|could breathe|stayed long enough to notice/i.test(contextText)
+              ? "grounded"
+              : "grounded",
+        tone: "grounded",
+        evidence: contextText,
+        weight: 1.95 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
     if (hasGentleRegulation(sentence) && !hasNegativeContext(sentence)) {
       signals.push({
-        label: "present",
+        label:
+          /felt more present|more present|noticed|aware|awareness|breath|body/i.test(contextText)
+            ? "present"
+            : /didn't rush|did not rush|took my time|slowed down|quiet|still|house was still|house was quiet|not empty.*still/i.test(contextText)
+              ? "grounded"
+              : "present",
         tone: "grounded",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 1.4 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/\bstill\b/i.test(sentence.sentence) && /(tense|on edge|watching|waiting|not sure|unsure|felt off|concerned|worried)/i.test(sentence.sentence)) {
+    if (/\bstill\b/i.test(contextText) && /(tense|on edge|watching|waiting|not sure|unsure|felt off|concerned|worried)/i.test(contextText)) {
       signals.push({
         label: "watchful",
         tone: "liminal",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 1.7 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/\bstill\b/i.test(sentence.sentence) && /(aware|noticed|present|breath|light|sound|body)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+    if (/\bstill\b/i.test(contextText) && /(aware|noticed|present|breath|light|sound|body)/i.test(contextText) && !hasNegativeContext(sentence)) {
       signals.push({
         label: "present",
         tone: "grounded",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 1.6 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/\bstill\b/i.test(sentence.sentence) && /(uncertain|waiting|not sure|unsure|in between|in-between)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+    if (/\bstill\b/i.test(contextText) && /(uncertain|waiting|not sure|unsure|in between|in-between)/i.test(contextText) && !hasNegativeContext(sentence)) {
       signals.push({
         label: "anticipatory",
         tone: "liminal",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 1.5 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/\bquiet\b/i.test(sentence.sentence) && /(heavy|low|subdued|tired|drained)/i.test(sentence.sentence)) {
+    if (/\bquiet\b/i.test(contextText) && /(heavy|low|subdued|tired|drained)/i.test(contextText)) {
       signals.push({
         label: "subdued",
         tone: "liminal",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 1.5 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/\bquiet\b/i.test(sentence.sentence) && /(clear|clearer|honest|truth|grounded)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+    if (/\bquiet\b/i.test(contextText) && /(clear|clearer|honest|truth|grounded)/i.test(contextText) && !hasNegativeContext(sentence)) {
       signals.push({
         label: "grounded",
         tone: "grounded",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 1.6 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/(didn't solve anything but felt more present|did not solve anything but felt more present|still unsure but steadier|uncertain but grounded|uncertain but steadier)/i.test(sentence.sentence)) {
+    if (/(didn't solve anything but felt more present|did not solve anything but felt more present|still unsure but steadier|uncertain but grounded|uncertain but steadier)/i.test(contextText)) {
       signals.push({
         label: "mixed recovery",
         tone: "grounded",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 2 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (hasConcernContext(sentence.sentence) && !isConflict(sentence) && !hasNegativeContext(sentence)) {
+    if (isConflict(sentence) || /(hate|wanted to hurt|wanted revenge|wanted to retaliate|destroy)/i.test(contextText)) {
       signals.push({
-        label: /(trying to find out|looking into|investigat|waiting for information)/i.test(sentence.sentence)
-          ? "investigative"
-          : /(suspicious|don't trust|do not trust|something felt off)/i.test(sentence.sentence)
-            ? "suspicious"
-            : /(watchful|keeping an eye|on guard)/i.test(sentence.sentence)
-              ? "watchful"
-              : /(vigilant|alert)/i.test(sentence.sentence)
-                ? "vigilant"
-                : "concerned",
-        tone: /(curious|wondering|trying to understand)/i.test(sentence.sentence) ? "liminal" : "negative",
-        evidence: sentence.sentence,
-        weight: 1.6 * scoreSentenceStrength(sentence),
-        index: sentence.index
-      });
-    }
-
-    if (isConflict(sentence) || /(hate|wanted to hurt|wanted revenge|wanted to retaliate|destroy)/i.test(sentence.sentence)) {
-      signals.push({
-        label: /(rage|furious|enraged)/i.test(sentence.sentence)
+        label: /(rage|furious|enraged)/i.test(contextText)
           ? "rageful"
-          : /(hostile|violent|hateful|vengeful|destroy)/i.test(sentence.sentence)
+          : /(hostile|violent|hateful|vengeful|destroy)/i.test(contextText)
             ? "hostile"
-            : /(spite|vindictive|retaliate|revenge)/i.test(sentence.sentence)
+            : /(spite|vindictive|retaliate|revenge)/i.test(contextText)
               ? "spiteful"
               : "angry",
         tone: "negative",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 2.5 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
 
-    if (/(kill myself|end my life|want to die|suicidal|suicide|hurt myself|harm myself|don't want to be here|wish i could disappear|better off without me|not wake up)/i.test(sentence.sentence)) {
+    if (/(kill myself|end my life|want to die|suicidal|suicide|hurt myself|harm myself|don't want to be here|wish i could disappear|better off without me|not wake up)/i.test(contextText)) {
       signals.push({
         label: "acute despair",
         tone: "negative",
-        evidence: sentence.sentence,
+        evidence: contextText,
         weight: 3.2 * scoreSentenceStrength(sentence),
+        index: sentence.index
+      });
+    }
+
+    if (
+      sentence.roles.includes("negative_event") &&
+      !sentence.roles.includes("threat_or_harm") &&
+      !isConflict(sentence) &&
+      /(heavy|burden|carrying|carry|pressure|too much|overload|looming|gnawing|haunting)/i.test(contextText)
+    ) {
+      signals.push({
+        label: "burdened",
+        tone: "negative",
+        evidence: contextText,
+        weight: 1.8 * scoreSentenceStrength(sentence),
         index: sentence.index
       });
     }
@@ -2099,30 +2604,40 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
       return sentence ? isEligibleSupportCandidate(event, sentence) : false;
     });
 
-  const supportCandidates: JournalAnalysis["supports"] = eligibleSupports
-    .sort((a, b) => b.weight - a.weight)
-    .map((event) => ({
-      label: normalizeSupportLabel(event.label, event.evidence, event.category),
-      category: event.category,
-      evidence: event.evidence,
-      impact:
-        event.category === "presence" || event.label === "made coffee slowly" || /present|steady|enough|calm|clearer|let it be/i.test(event.evidence)
-          ? "grounding"
-          : event.category === "connection"
-            ? "validating"
-            : event.category === "movement" && /energized|alive/i.test(event.evidence)
-              ? "energizing"
-              : "helpful"
-    }));
+  const inferredSupportCandidates = eventsResult.sentences
+    .map((sentence) => inferSupportCandidateFromSentence(sentence))
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const promotedSupports = dedupeByLabelAndEvidence(supportCandidates)
+  const supportCandidates: JournalAnalysis["supports"] = dedupeByLabelAndEvidence(
+    [
+      ...eligibleSupports
+        .sort((a, b) => b.weight - a.weight)
+        .map((event) => ({
+          label: normalizeSupportLabel(event.label, event.evidence, event.category),
+          category: event.category,
+          evidence: event.evidence,
+          impact: (
+            event.category === "presence" || event.label === "made coffee slowly" || /present|steady|enough|calm|clearer|let it be/i.test(event.evidence)
+              ? "grounding"
+              : event.category === "connection"
+                ? "validating"
+                : event.category === "movement" && /energized|alive/i.test(event.evidence)
+                  ? "energizing"
+                  : "helpful"
+          ) as JournalAnalysis["supports"][number]["impact"]
+        })),
+      ...inferredSupportCandidates
+    ].filter((item) => Boolean(item.label))
+  );
+
+  const promotedSupports = supportCandidates
     .filter((event) => isEvidenceLabelMatch(event.label, event.evidence))
     .map((event) => ({ ...event, score: scorePromotedSupport(event) }))
     .filter((event) => event.score >= 2.1)
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
     .map(({ score, ...event }) => event);
-  const subtleSupportFallback = dedupeByLabelAndEvidence(supportCandidates)
+  const subtleSupportFallback = supportCandidates
     .filter((event) => isEvidenceLabelMatch(event.label, event.evidence))
     .map((event) => ({ ...event, score: scoreSubtleSupport(event) }))
     .filter((event) => event.score >= 1.75)
@@ -2133,17 +2648,43 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
 
   const supports = promotedSupports.length > 0 ? promotedSupports : subtleSupportFallback;
 
-  const copingActions: JournalAnalysis["coping_actions"] = dedupeByLabelAndEvidence(
-    eligibleSupports
-      .filter((support) => ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(support.category))
-      .filter((support) => /(didn't rush|did not rush|slowed down|pause|paused|let it sit|let it settle|sat with|let it be|stayed with|noticed|breath|breathe|walk|run|gym|reached out|called|texted|journaled|wrote it down|made|brewed|cooked|prepared)/i.test(support.evidence))
-      .map((support) => ({
-        label: describeCopingAction(support.label, support.evidence, support.category),
-        evidence: support.evidence,
-        action: describeCopingAction(support.label, support.evidence, support.category),
-        impact: (/breath|present|steady|didn't rush|did not rush|slowed down|let it be|sat with/i.test(support.evidence) ? "grounding" : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
-      }))
-  )
+  const copingCandidates = dedupeByLabelAndEvidence(
+    [
+      ...eventsResult.sentences
+        .map((sentence) => inferCopingCandidateFromSentence(sentence))
+        .filter((item): item is NonNullable<typeof item> => item !== null),
+      ...eventsResult.events
+        .filter((event) => {
+          const sentence = eventsResult.sentences[event.index];
+          if (!sentence) return false;
+
+          return (
+            sentence.roles.includes("intentional_coping") ||
+            ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(event.category) ||
+            /(didn't rush|did not rush|took my time|slowed down|pause|paused|let it sit|let it settle|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|noticed|breath|breathe|walk|run|gym|reached out|called|texted|journaled|wrote it down|made|brewed|cooked|prepared)/i.test(
+              getSegmentContextText(sentence)
+            )
+          );
+        })
+        .map((event) => {
+          const sentence = eventsResult.sentences[event.index];
+          const evidence = sentence ? getSegmentContextText(sentence) : event.evidence;
+          const category = inferCopingCategoryFromText(evidence);
+          const action = describeCopingAction(event.label, evidence, category);
+
+          return {
+            label: action,
+            evidence,
+            action,
+            impact: (/breath|present|steady|didn't rush|did not rush|took my time|slowed down|let it be|sat with|stayed with|paused/i.test(evidence)
+              ? "grounding"
+              : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
+          };
+        })
+    ].filter((item) => Boolean(item.action))
+  );
+
+  const copingActions: JournalAnalysis["coping_actions"] = copingCandidates
     .map((item) => ({ ...item, score: scoreCopingAction(item.action, item.evidence, item.impact) }))
     .filter((item) => item.score >= 1.9)
     .filter((item) => !supports.some((support) => support.label.toLowerCase() === item.action.toLowerCase()))
@@ -2151,17 +2692,7 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
     .filter((item) => item.action.length <= 44)
     .slice(0, 2)
     .map(({ score, ...item }) => item);
-  const subtleCopingFallback = dedupeByLabelAndEvidence(
-    eligibleSupports
-      .filter((support) => ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(support.category))
-      .filter((support) => /(didn't rush|did not rush|took my time|slowed down|pause|paused|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|walk|reached out|called|texted|journaled|wrote it down|made|brewed|cooked|prepared)/i.test(support.evidence))
-      .map((support) => ({
-        label: describeCopingAction(support.label, support.evidence, support.category),
-        evidence: support.evidence,
-        action: describeCopingAction(support.label, support.evidence, support.category),
-        impact: (/breath|present|steady|didn't rush|did not rush|slowed down|let it be|sat with/i.test(support.evidence) ? "grounding" : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
-      }))
-  )
+  const subtleCopingFallback = copingCandidates
     .map((item) => ({ ...item, score: scoreSubtleCopingAction(item.action, item.evidence, item.impact) }))
     .filter((item) => item.score >= 1.55)
     .filter((item) => !supports.some((support) => support.label.toLowerCase() === item.action.toLowerCase()))
@@ -2174,18 +2705,21 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
   const restorativeSignals = unique([
     ...supports
       .filter((item) => hasInternalShiftLanguage(item.evidence))
-      .map((item) => describeRestorativeMoment(item.label, item.evidence))
-      .filter(Boolean),
+      .map((item) => JSON.stringify({ moment: describeRestorativeMoment(item.label, item.evidence), evidence: item.evidence })),
+    ...eventsResult.sentences
+      .filter((sentence) => sentence.roles.includes("internal_shift"))
+      .map((sentence) => JSON.stringify({ moment: describeRestorativeMoment(sentence.sentence, getSegmentContextText(sentence)), evidence: getSegmentContextText(sentence) })),
     ...stateResult.signals
-      .filter((item) => item.label === "present" || item.label === "accepting" || item.label === "steady" || item.label === "mixed recovery" || item.label === "emotionally honest")
-      .filter((item) => hasInternalShiftLanguage(item.evidence) || /accepting|steady|mixed recovery|emotionally honest/.test(item.label))
-      .map((item) => describeRestorativeMoment(item.label, item.evidence))
-      .filter(Boolean)
+      .filter((item) => item.label === "present" || item.label === "accepting" || item.label === "steady" || item.label === "mixed recovery" || item.label === "emotionally honest" || item.label === "grounded" || item.label === "clarifying" || item.label === "relieved")
+      .filter((item) => hasInternalShiftLanguage(item.evidence) || /accepting|steady|mixed recovery|emotionally honest|grounded|clarifying|relieved/.test(item.label))
+      .map((item) => JSON.stringify({ moment: describeRestorativeMoment(item.label, item.evidence), evidence: item.evidence }))
   ])
-    .map((item) => ({ item, score: scoreRestorativeMoment(item, supports.find((support) => describeRestorativeMoment(support.label, support.evidence) === item)?.evidence ?? item) }))
+    .map((item) => JSON.parse(item) as { moment: string; evidence: string })
+    .filter((item) => Boolean(item.moment))
+    .map((item) => ({ ...item, score: scoreRestorativeMoment(item.moment, item.evidence) }))
     .filter((item) => item.score >= 1.8)
     .sort((a, b) => b.score - a.score)
-    .map((item) => item.item)
+    .map((item) => item.moment)
     .slice(0, 3);
 
   return { supports, copingActions: finalCopingActions, restorativeSignals };
@@ -2281,21 +2815,51 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   function segmentSnapshot(segment: SentenceSignal[]) {
     const segmentSignals = signals.filter((signal) => segment.some((sentence) => sentence.index === signal.index));
     const segmentEvents = eventSignals.filter((event) => segment.some((sentence) => sentence.index === event.index));
+    const roleWeights = getSegmentRoleWeights(segment);
     const weights = getStateWeights(segmentSignals);
-    const negative = weights.negative + segmentEvents.reduce((sum, event) => sum + event.negative, 0);
-    const positive = weights.positive + segmentEvents.reduce((sum, event) => sum + event.positive, 0);
-    const grounded = weights.grounded;
-    const liminal = weights.liminal;
-    const reactive = weights.reactive;
-    const watchful = segmentSignals.filter((signal) => isWatchfulEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0);
+    const negative = weights.negative + segmentEvents.reduce((sum, event) => sum + event.negative, 0) + roleWeights.negative + roleWeights.threat * 0.65;
+    const positive = weights.positive + segmentEvents.reduce((sum, event) => sum + event.positive, 0) + roleWeights.positive * 0.45 + roleWeights.supportive * 0.3;
+    const grounded = weights.grounded + roleWeights.supportive * 0.45 + roleWeights.internalShift * 0.65 + roleWeights.coping * 0.25;
+    const liminal = weights.liminal + roleWeights.reflection * 0.4 + roleWeights.atmosphere * 0.18 + roleWeights.mixed * 0.22;
+    const reactive = weights.reactive + roleWeights.threat * 0.85 + roleWeights.negative * 0.15;
+    const watchful = segmentSignals.filter((signal) => isWatchfulEmotion(signal.label)).reduce((sum, signal) => sum + signal.weight, 0) + roleWeights.concern * 0.9;
     const ranked = [...segmentSignals].sort((a, b) => b.weight - a.weight);
     const totalStrength = negative + positive + grounded + liminal + reactive + watchful;
     const hasLabel = (value: string) => segmentSignals.some((signal) => signal.label === value);
     const specificSegmentLabel = pickSpecificSegmentLabel(segmentSignals, ranked[0]?.label ?? "steady");
+    const contextualLabel =
+      roleWeights.threat >= 1.2 && reactive >= Math.max(grounded, liminal, 1.2)
+        ? ranked.find((signal) => ["fearful", "alarmed", "reactive", "hostile", "angry", "burdened"].includes(signal.label))?.label ?? "fearful"
+        : roleWeights.concern >= 1.05 && watchful >= Math.max(negative - 0.1, liminal, 1.1)
+          ? ranked.find((signal) => ["investigative", "suspicious", "watchful", "vigilant", "concerned", "curious", "anticipatory"].includes(signal.label))
+              ?.label ?? "watchful"
+          : roleWeights.internalShift >= 1 && grounded >= Math.max(negative - 0.15, liminal - 0.1, 1.1)
+            ? hasLabel("accepting")
+              ? "accepting"
+              : hasLabel("relieved")
+                ? "relieved"
+                : hasLabel("clarifying") || hasLabel("emotionally honest")
+                  ? "clarifying"
+                  : hasLabel("grounded")
+                    ? "grounded"
+                    : "grounded"
+            : roleWeights.supportive >= 1 && grounded >= Math.max(negative - 0.1, 1)
+              ? hasLabel("present") && /(felt more present|more present|aware|noticed)/i.test(segment.map((item) => getSegmentContextText(item)).join(" "))
+                ? "present"
+                : "grounded"
+              : roleWeights.reflection >= 1 && liminal >= Math.max(grounded - 0.2, 1.2)
+                ? hasLabel("emotionally honest")
+                  ? "emotionally honest"
+                  : hasLabel("clarifying")
+                    ? "clarifying"
+                    : specificSegmentLabel
+                : specificSegmentLabel;
 
     const label: string =
       hasLabel("acute despair")
         ? "acute despair"
+      : !isGenericArcLabel(contextualLabel)
+        ? contextualLabel
       : reactive >= Math.max(grounded + positive, negative - 0.2) && ranked.find((signal) => isReactiveEmotion(signal.label))?.label
         ? ranked.find((signal) => isReactiveEmotion(signal.label))?.label ?? "reactive"
         : watchful >= Math.max(negative - 0.1, liminal, 1.4)
@@ -2324,7 +2888,7 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
                   ? ranked.find((signal) => signal.tone === "positive" || signal.tone === "grounded")?.label ?? specificSegmentLabel
                   : specificSegmentLabel;
 
-    return { label, negative, positive, grounded, liminal, reactive, watchful, totalStrength, ranked };
+    return { label, negative, positive, grounded, liminal, reactive, watchful, totalStrength, ranked, roleWeights };
   }
 
   const startSnapshot = segmentSnapshot(slices[0]);
@@ -2345,7 +2909,7 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
     const dominant =
       [endSnapshot, middleSnapshot, startSnapshot]
         .sort((a, b) => b.totalStrength - a.totalStrength)
-        .find((snapshot) => snapshot.totalStrength > 0.6)?.label ?? "present";
+        .find((snapshot) => snapshot.totalStrength > 0.6)?.label ?? pickSpecificSegmentLabel(signals, supports.length > 0 ? "grounded" : stressors.length > 0 ? "burdened" : "present");
 
     return {
       start: dominant,
@@ -2361,8 +2925,10 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const start = startSnapshot.label;
   const middle = middleSnapshot.label;
   const end = endSnapshot.label;
-  const before = dominantBefore?.signal.label ?? start;
-  const after = dominantAfter?.signal.label ?? end;
+  const before =
+    dominantBefore?.signal.label && !isGenericArcLabel(dominantBefore.signal.label) ? dominantBefore.signal.label : start;
+  const after =
+    dominantAfter?.signal.label && !isGenericArcLabel(dominantAfter.signal.label) ? dominantAfter.signal.label : end;
   const beforeScore = dominantBefore?.score ?? 0;
   const afterScore = dominantAfter?.score ?? 0;
   const groundingEnd =
@@ -2379,7 +2945,7 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const sustainedReactivity = startSnapshot.reactive >= 1.6 && middleSnapshot.reactive >= 1.8 && endSnapshot.reactive >= 1.5;
   const sustainedWatchfulness = startSnapshot.watchful >= 1.4 && middleSnapshot.watchful >= 1.4 && endSnapshot.watchful >= 1.2;
   const explicitHarmPresent = stressors.some((item) => item.label === "physical aggression" || item.category === "harm" || item.label === "threatening situation");
-  const direction: JournalAnalysis["emotional_shift"]["direction"] =
+  const preliminaryDirection: JournalAnalysis["emotional_shift"]["direction"] =
     Math.abs(scoreDelta) < 0.2 && after === before
       ? "unchanged"
       : sustainedReactivity || (explicitHarmPresent && end === reaction)
@@ -2400,15 +2966,15 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
           !/(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery|grounded)/i.test(start) &&
           endSnapshot.reactive < startSnapshot.reactive + 0.2
         ? "improved"
-      : /(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(end) &&
-            !/(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair)/i.test(start)
+      : /(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair|burdened|reactive)/i.test(end) &&
+            !/(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair|burdened|reactive)/i.test(start)
           ? "worsened"
           : "mixed";
 
   const layeredArc = supports.length > 0 && stressors.length > 0 && Math.abs(endSnapshot.positive - endSnapshot.negative) < 0.7;
   const unresolvedArc = (explicitHarmPresent || sustainedReactivity) && end === reaction;
   const arcMode =
-    sentences.length <= 2 || (direction === "unchanged" && !reactiveMiddle && !sustainedWatchfulness)
+    sentences.length <= 2 || (preliminaryDirection === "unchanged" && !reactiveMiddle && !sustainedWatchfulness)
       ? ("single-state" as const)
       : unresolvedArc
         ? ("unresolved" as const)
@@ -2416,9 +2982,17 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
           ? ("layered" as const)
           : (startSnapshot.positive >= 1.2 && middleSnapshot.negative >= startSnapshot.positive + 0.4) || (reactiveMiddle && end === start)
             ? ("interrupted" as const)
-            : direction === "mixed" || sustainedWatchfulness || (supports.length > 0 && stressors.length > 0 && end !== reaction && start !== reaction)
+            : preliminaryDirection === "mixed" || sustainedWatchfulness || (supports.length > 0 && stressors.length > 0 && end !== reaction && start !== reaction)
               ? ("mixed-thread" as const)
               : ("shifted" as const);
+  const direction: JournalAnalysis["emotional_shift"]["direction"] =
+    arcMode === "single-state"
+      ? "unchanged"
+      : arcMode === "interrupted" || arcMode === "mixed-thread" || arcMode === "layered"
+        ? "mixed"
+        : arcMode === "unresolved"
+          ? (after === before ? "unchanged" : "mixed")
+          : preliminaryDirection;
 
   return { start: before, middle, reaction, end: after, direction, arcMode, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
 }
@@ -2487,7 +3061,13 @@ function synthesizeInterpretation(
   else if (stressors.length > 0 && negativeWeight > positiveWeight + 0.8) primaryEmotion = centralSignals.find((label) => !["present", "steady", "reflective"].includes(label)) ?? primaryEmotion;
   else if (isMeaningfulDiscomfort(sentences[Math.min(1, Math.max(0, sentences.length - 1))] ?? sentences[0])) primaryEmotion = signals.some((signal) => signal.label === "emotionally honest") ? "emotional honesty" : "tender";
 
-  if (checkInProfile.highStress && !acuteRiskWeight && !["acute despair", "hostile", "rageful", "angry", "spiteful", "fearful", "alarmed", "anxious", "overwhelmed", "tense"].includes(primaryEmotion)) {
+  if (
+    checkInProfile.highStress &&
+    !acuteRiskWeight &&
+    !["acute despair", "hostile", "rageful", "angry", "spiteful", "fearful", "alarmed", "anxious", "overwhelmed", "tense", "burdened", "reactive", "watchful", "concerned"].includes(
+      primaryEmotion
+    )
+  ) {
     primaryEmotion =
       centralSignals.find((label) => ["alarmed", "fearful", "anxious", "tense", "overwhelmed", "concerned", "watchful"].includes(label)) ??
       (checkInProfile.highEnergy ? "activated" : "tense");
@@ -2522,6 +3102,8 @@ function synthesizeInterpretation(
     summary =
       checkInProfile.highStress && checkInProfile.highEnergy
         ? `The entry stays in a highly activated state, with more intensity than resolution across the whole reflection.`
+        : ["grounded", "clarifying", "accepting", "relieved"].includes(primaryEmotion)
+          ? "The entry stays in a quieter, more attentive frame, with more grounding than dramatic emotional movement."
         : watchfulWeight >= 1.6 && negativeWeight <= watchfulWeight + 0.8
           ? "The entry stays in a watchful, concerned frame rather than moving through a large emotional shift."
           : `The entry stays mostly in one emotional frame, landing as ${primaryEmotion} rather than moving through a strong before-and-after change.`;
@@ -2661,7 +3243,15 @@ function synthesizeInterpretation(
       findMatch(entry, /\bdog\b/i),
       findMatch(entry, /\blaundromat\b/i),
       findMatch(entry, /\brefund call\b/i),
-      findMatch(entry, /\bsister\b/i)
+      findMatch(entry, /\bsister\b/i),
+      findMatch(entry, /\bfront door\b/i),
+      findMatch(entry, /\bmorning routine\b/i),
+      findMatch(entry, /\bfarmer'?s market\b/i),
+      findMatch(entry, /\bStudio Moonfall\b/i),
+      findMatch(entry, /\bmall\b/i),
+      ...collectCapitalizedAnchors(entry),
+      ...supports.map((item) => keywordFromPromotedItem(item.label)),
+      ...stressors.map((item) => keywordFromPromotedItem(item.label))
     ]
   ])
     .map((item) => sanitizePersonalKeywordFinal(item ?? "", "none"))
@@ -2733,10 +3323,15 @@ function synthesizeInterpretation(
       ...copingActions
         .slice(0, 2)
         .map((item) => JSON.stringify({ text: quoteSupportingEvidence(getCopingEvidenceText(item)), type: "support" as const, label: item.action })),
-      ...supports
+      ...restorativeSignals
         .slice(0, 2)
-        .filter((item) => hasInternalShiftLanguage(item.evidence))
-        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "support" as const, label: describeRestorativeMoment(item.label, item.evidence) })),
+        .map((item: string) => {
+          const supportEvidence = supports.find((support) => describeRestorativeMoment(support.label, support.evidence) === item)?.evidence;
+          const sentenceEvidence = sentences.find((sentence) => describeRestorativeMoment(sentence.sentence, getSegmentContextText(sentence)) === item);
+          const evidence = supportEvidence ?? (sentenceEvidence ? getSegmentContextText(sentenceEvidence) : "");
+          return evidence ? JSON.stringify({ text: quoteSupportingEvidence(evidence), type: "support" as const, label: item }) : null;
+        })
+        .filter((item: string | null): item is string => Boolean(item)),
       ...signals
         .filter((item) => promotedEmotionEvidenceLabels.has(normalizeConceptLabel(item.label)))
         .filter((item) => !isWeakEntityLabel(item.label))
@@ -2867,7 +3462,7 @@ function applyCheckInGuardrailsToAnalysis(analysis: JournalAnalysis, userCheckIn
     energy_level: profile.energy ?? analysis.energy_level
   };
 
-  if (profile.highStress && !/(acute despair|hostile|rageful|spiteful|angry|fearful|alarmed|anxious|overwhelmed|tense|concerned|watchful|vigilant)/i.test(next.primary_emotion)) {
+  if (!/(acute despair|hostile|rageful|spiteful|angry|fearful|alarmed|anxious|overwhelmed|tense|concerned|watchful|vigilant|burdened|reactive)/i.test(next.primary_emotion) && profile.highStress) {
     next.primary_emotion = profile.highEnergy ? "activated" : "tense";
   }
 
