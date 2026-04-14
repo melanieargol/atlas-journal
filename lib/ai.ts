@@ -454,6 +454,11 @@ function sanitizePersonalKeywordFinal(value: string, safetyLevel: JournalAnalysi
   return compact;
 }
 
+function getCopingEvidenceText(item: JournalAnalysis["coping_actions"][number]) {
+  const internal = item as JournalAnalysis["coping_actions"][number] & { evidence?: string };
+  return internal.evidence ?? item.action;
+}
+
 function normalizeSupportLabel(label: string, evidence: string, category: string) {
   if (/(coffee with|lunch with|dinner with|spent time with|hung out with|went out with)/i.test(evidence) && /\b(friend|friends?)\b/i.test(evidence)) {
     return "time with friends";
@@ -568,12 +573,12 @@ function isEligibleSupportCandidate(event: EventSignal, sentence: SentenceSignal
 }
 
 function isEligiblePersonalKeyword(label: string, evidence: string) {
-  const normalized = compactSnippet(label, 2, 32).toLowerCase();
+  const normalized = compactSnippet(label, 3, 32).toLowerCase();
   if (normalized.length < 4 || isWeakEntityLabel(normalized)) return false;
   if (!/[a-z]/i.test(normalized)) return false;
-  if (normalized.split(/\s+/).length > 2) return false;
+  if (normalized.split(/\s+/).length > 3) return false;
   if (/[.?!]/.test(label)) return false;
-  if (/^(present|steady|transition|acceptance|movement|connection|resolution|pressure|disruption|conflict|watchfulness|self-regulation|emotional honesty|reactive strain|supportive environment)$/.test(normalized)) return false;
+  if (/^(present|steady|transition|acceptance|movement|connection|resolution|pressure|disruption|conflict|watchfulness|self-regulation|emotional honesty|reactive strain|supportive environment|clarifying|mixed recovery|grounded|relieved|activated|reactive)$/.test(normalized)) return false;
   if (normalized.split(/\s+/).length === 1 && !/(call|walk|coffee|home|money|sleep|truth|clarity|rush|present|enough)/i.test(normalized) && !evidence.toLowerCase().includes(normalized)) {
     return false;
   }
@@ -691,6 +696,14 @@ function scorePromotedStressor(item: JournalAnalysis["stressors"][number]) {
   return score;
 }
 
+function scoreSubtleSupport(item: JournalAnalysis["supports"][number]) {
+  let score = scorePromotedSupport(item) - 0.45;
+  if (/(small ritual|quiet environment|quiet house|dog presence|time with friends|time with family|sunlight|fresh air|bookstore outing|meal at home)/i.test(item.label)) {
+    score += 0.35;
+  }
+  return score;
+}
+
 function scoreRestorativeMoment(moment: string, evidence: string) {
   let score = 1;
   if (/clarity|grounding|release|awareness|quiet/.test(moment)) score += 0.8;
@@ -703,6 +716,14 @@ function scoreCopingAction(action: string, evidence: string, impact: string) {
   if (impact === "grounding") score += 0.8;
   if (/(didn't rush|did not rush|took my time|slowed down|paused|pause|sat with|let it be|stayed with|breathe|breath)/i.test(evidence)) score += 1;
   if (/(used a quiet routine|steady the moment|clear some emotional pressure|reached toward connection)/i.test(action)) score += 0.7;
+  return score;
+}
+
+function scoreSubtleCopingAction(action: string, evidence: string, impact: string) {
+  let score = scoreCopingAction(action, evidence, impact) - 0.35;
+  if (/(didn't rush|did not rush|took my time|slowed down|paused|sat with|let it be|did not reach for distractions|didn't reach for distractions)/i.test(evidence)) {
+    score += 0.35;
+  }
   return score;
 }
 
@@ -1758,6 +1779,32 @@ function extractEvents(entry: string) {
       });
     }
 
+    if (/\b(house was still|house was quiet|quiet room|quiet house)\b/i.test(sentence.sentence) && !negativeContext) {
+      events.push({
+        label: findMatch(sentence.sentence, /\b(house was still|house was quiet|quiet room|quiet house)\b/i) || "quiet environment",
+        category: "environment",
+        evidence: sentence.sentence,
+        kind: gentleRegulation || explicitRelief ? "support" : "neutral",
+        weight: scoreSentenceStrength(sentence) + 0.55,
+        positive: gentleRegulation || explicitRelief ? 1.8 : 0.7,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
+    if (/\bdog\b/i.test(sentence.sentence) && /(nearby|next to me|beside me|with me|curled up|quiet|calm)/i.test(sentence.sentence) && !negativeContext) {
+      events.push({
+        label: "dog presence",
+        category: "comfort",
+        evidence: sentence.sentence,
+        kind: gentleRegulation || explicitRelief ? "support" : "neutral",
+        weight: scoreSentenceStrength(sentence) + 0.5,
+        positive: gentleRegulation || explicitRelief ? 1.7 : 0.65,
+        negative: 0,
+        index: sentence.index
+      });
+    }
+
     if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i.test(sentence.sentence) && (positiveExperience || explicitRelief || gentleRegulation) && !negativeContext) {
       events.push({
         label: findMatch(sentence.sentence, /\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i) || "supportive environment",
@@ -2075,8 +2122,16 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
     .map(({ score, ...event }) => event);
+  const subtleSupportFallback = dedupeByLabelAndEvidence(supportCandidates)
+    .filter((event) => isEvidenceLabelMatch(event.label, event.evidence))
+    .map((event) => ({ ...event, score: scoreSubtleSupport(event) }))
+    .filter((event) => event.score >= 1.75)
+    .filter((event) => /(small ritual|quiet environment|quiet house|dog presence|time with friends|time with family|sunlight|fresh air|bookstore outing|meal at home|food at home)/i.test(event.label))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 1)
+    .map(({ score, ...event }) => event);
 
-  const supports = promotedSupports;
+  const supports = promotedSupports.length > 0 ? promotedSupports : subtleSupportFallback;
 
   const copingActions: JournalAnalysis["coping_actions"] = dedupeByLabelAndEvidence(
     eligibleSupports
@@ -2096,6 +2151,25 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
     .filter((item) => item.action.length <= 44)
     .slice(0, 2)
     .map(({ score, ...item }) => item);
+  const subtleCopingFallback = dedupeByLabelAndEvidence(
+    eligibleSupports
+      .filter((support) => ["routine", "presence", "movement", "self-regulation", "body care", "connection"].includes(support.category))
+      .filter((support) => /(didn't rush|did not rush|took my time|slowed down|pause|paused|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|walk|reached out|called|texted|journaled|wrote it down|made|brewed|cooked|prepared)/i.test(support.evidence))
+      .map((support) => ({
+        label: describeCopingAction(support.label, support.evidence, support.category),
+        evidence: support.evidence,
+        action: describeCopingAction(support.label, support.evidence, support.category),
+        impact: (/breath|present|steady|didn't rush|did not rush|slowed down|let it be|sat with/i.test(support.evidence) ? "grounding" : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
+      }))
+  )
+    .map((item) => ({ ...item, score: scoreSubtleCopingAction(item.action, item.evidence, item.impact) }))
+    .filter((item) => item.score >= 1.55)
+    .filter((item) => !supports.some((support) => support.label.toLowerCase() === item.action.toLowerCase()))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 1)
+    .map(({ score, ...item }) => item);
+
+  const finalCopingActions = copingActions.length > 0 ? copingActions : subtleCopingFallback;
 
   const restorativeSignals = unique([
     ...supports
@@ -2114,7 +2188,7 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
     .map((item) => item.item)
     .slice(0, 3);
 
-  return { supports, copingActions, restorativeSignals };
+  return { supports, copingActions: finalCopingActions, restorativeSignals };
 }
 
 function detectStressors(_entry: string, eventsResult: ReturnType<typeof extractEvents>, stateResult: ReturnType<typeof extractStateSignals>) {
@@ -2152,8 +2226,15 @@ function detectStressors(_entry: string, eventsResult: ReturnType<typeof extract
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
     .map(({ score, ...item }) => item);
+  const subtleStressFallback = dedupeByLabelAndEvidence(eligibleStressors)
+    .filter((item) => !isWeakEntityLabel(item.label))
+    .map((item) => ({ ...item, score: scorePromotedStressor(item) }))
+    .filter((item) => item.score >= 2.15)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 1)
+    .map(({ score, ...item }) => item);
 
-  const stressors = promotedStressors;
+  const stressors = promotedStressors.length > 0 ? promotedStressors : subtleStressFallback;
 
   const triggers: JournalAnalysis["triggers"] = stressors.map((item) => ({
     type:
@@ -2324,14 +2405,20 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
           ? "worsened"
           : "mixed";
 
+  const layeredArc = supports.length > 0 && stressors.length > 0 && Math.abs(endSnapshot.positive - endSnapshot.negative) < 0.7;
+  const unresolvedArc = (explicitHarmPresent || sustainedReactivity) && end === reaction;
   const arcMode =
-    sentences.length <= 2 || (direction === "unchanged" && !reactiveMiddle)
+    sentences.length <= 2 || (direction === "unchanged" && !reactiveMiddle && !sustainedWatchfulness)
       ? ("single-state" as const)
-      : (startSnapshot.positive >= 1.2 && middleSnapshot.negative >= startSnapshot.positive + 0.4) || (reactiveMiddle && end === start)
-        ? ("interrupted" as const)
-        : direction === "mixed" || sustainedWatchfulness || (supports.length > 0 && stressors.length > 0 && end !== reaction && start !== reaction)
-          ? ("mixed-thread" as const)
-          : ("shifted" as const);
+      : unresolvedArc
+        ? ("unresolved" as const)
+        : layeredArc
+          ? ("layered" as const)
+          : (startSnapshot.positive >= 1.2 && middleSnapshot.negative >= startSnapshot.positive + 0.4) || (reactiveMiddle && end === start)
+            ? ("interrupted" as const)
+            : direction === "mixed" || sustainedWatchfulness || (supports.length > 0 && stressors.length > 0 && end !== reaction && start !== reaction)
+              ? ("mixed-thread" as const)
+              : ("shifted" as const);
 
   return { start: before, middle, reaction, end: after, direction, arcMode, arcConfidence: clamp(arcStrength / 9, 0.35, 0.92) };
 }
@@ -2438,6 +2525,14 @@ function synthesizeInterpretation(
         : watchfulWeight >= 1.6 && negativeWeight <= watchfulWeight + 0.8
           ? "The entry stays in a watchful, concerned frame rather than moving through a large emotional shift."
           : `The entry stays mostly in one emotional frame, landing as ${primaryEmotion} rather than moving through a strong before-and-after change.`;
+  } else if (timeline.arcMode === "unresolved") {
+    summary = topStressor
+      ? `${topStressor.label} keeps the entry activated, and the stronger reaction does not truly settle by the end.`
+      : `The entry carries a sharper reaction that stays unresolved rather than softening into a clearer landing.`;
+  } else if (timeline.arcMode === "layered") {
+    summary = topSupport && topStressor
+      ? `${topSupport.label} and ${topStressor.label} coexist here, so the entry lands with layered steadiness and strain rather than a simple turn in one direction.`
+      : `The entry holds layered emotional threads at once, so the landing is more coexistence than clean resolution.`;
   } else if (timeline.arcMode === "interrupted") {
     summary = topStressor
       ? `The entry starts from a steadier footing, gets interrupted by ${topStressor.label}, and then lands calmer than the hardest moment itself.`
@@ -2448,8 +2543,6 @@ function synthesizeInterpretation(
     summary = topSupport && topStressor
       ? `${topStressor.label} and ${topSupport.label} both matter here, and the entry holds that mixed state without forcing a dramatic turn.`
       : `The entry holds more than one emotional thread at once, with mixed but meaningful movement rather than a simple before-and-after shift.`;
-  } else if (topStressor && endState === reactionState) {
-    summary = `${topStressor.label} keeps the entry activated, and the stronger reaction does not fully resolve by the end.`;
   } else if (reactiveWeight >= 2.1 && endState === reactionState) {
     summary = `The entry intensifies into ${reactionState}, and it lands there without much sign of resolution.`;
   } else if (watchfulWeight >= 1.8 && endState === reactionState) {
@@ -2639,7 +2732,7 @@ function synthesizeInterpretation(
         .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "support" as const, label: normalizePromotedConcept(item.label, item.evidence, "support") })),
       ...copingActions
         .slice(0, 2)
-        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.action), type: "support" as const, label: item.action })),
+        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(getCopingEvidenceText(item)), type: "support" as const, label: item.action })),
       ...supports
         .slice(0, 2)
         .filter((item) => hasInternalShiftLanguage(item.evidence))
@@ -2651,11 +2744,11 @@ function synthesizeInterpretation(
         .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "emotion" as const, label: normalizeConceptLabel(item.label) }))
     ]).map((item) => JSON.parse(item) as JournalAnalysis["evidence_spans"][number]),
     notablePhrases,
-    reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null, timeline.reaction !== timeline.start ? `reaction: ${timeline.reaction}` : null]).slice(0, 6),
+    reflectionTags: unique([primaryEmotion, ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null]).slice(0, 6),
     confidence: {
       primary_emotion: rankedStates.length > 0 ? (timeline.arcMode === "single-state" ? 0.74 : 0.86) : 0.5,
       triggers: stressors.length > 0 ? 0.82 : 0.42,
-      coping_actions: supports.length > 0 ? 0.84 : 0.4,
+      coping_actions: copingActions.length > 0 ? 0.84 : 0.4,
       overall: signals.length > 0 || supports.length > 0 || stressors.length > 0 ? (timeline.arcMode === "single-state" ? 0.72 : 0.8) : 0.46
     },
     supports,
