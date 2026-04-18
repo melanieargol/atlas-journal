@@ -17,7 +17,7 @@ const emotionLexicon = [
   { label: "angry", words: ["angry", "furious", "rage", "resentful", "hostile"], tone: -3 },
   { label: "frustrated", words: ["frustrated", "annoyed", "irritated"], tone: -2 },
   { label: "drained", words: ["drained", "exhausted", "spent", "wiped"], tone: -2 },
-  { label: "sad", words: ["sad", "down", "heavy", "low"], tone: -2 },
+  { label: "sad", words: ["sad", "down", "heavy", "heartbroken", "felt sad"], tone: -2 },
   { label: "numb", words: ["numb", "flat", "blank", "shut down"], tone: -2 },
   { label: "grieving", words: ["grief", "grieving", "mourning", "loss"], tone: -3 },
   { label: "ashamed", words: ["ashamed", "embarrassed", "humiliated"], tone: -2 },
@@ -49,7 +49,7 @@ const explicitEmotionLexicon = [
   { label: "vigilant", regex: /\bvigilant|hypervigilant|alert\b/i, tone: "negative", score: 2 },
   { label: "curious", regex: /\bcurious|wondering|trying to understand|trying to figure out\b/i, tone: "liminal", score: 1.6 },
   { label: "investigative", regex: /\binvestigat|looking into|trying to find out|waiting for information\b/i, tone: "liminal", score: 1.8 },
-  { label: "sad", regex: /\bsad|low|heavy\b/i, tone: "negative", score: 1.8 },
+  { label: "sad", regex: /\bsad|heartbroken|felt sad|a little down|heavy\b/i, tone: "negative", score: 1.8 },
   { label: "grieving", regex: /\bgrief|grieving|mourning|loss\b/i, tone: "negative", score: 2.4 },
   { label: "ashamed", regex: /\bashamed|embarrassed|humiliated\b/i, tone: "negative", score: 2 },
   { label: "lonely", regex: /\blonely|alone|isolated\b/i, tone: "negative", score: 1.9 },
@@ -728,9 +728,19 @@ function normalizeCopingImpact(
 }
 
 function inferSupportCandidateFromSentence(sentence: SentenceSignal): JournalAnalysis["supports"][number] | null {
+
   const contextText = getSegmentContextText(sentence);
 
-  if (!sentence.roles.some((role) => role === "supportive_context" || role === "positive_event")) {
+  const hasSupportRole = sentence.roles.some(
+    (role) => role === "supportive_context" || role === "positive_event"
+  );
+
+  const hasPositiveSupportEvidence =
+    /\b(great time|good time|enjoyable|enjoyable company|delicious|proud|excited|stoked|fun|felt better after|better after|nice session|new book|got a new book|straight a|straight as|learned|portfolio|competition|app|scheduled|appointment|prom|nap|rested|rest|meal|ice cream|dinner|lunch|breakfast|friends|family|grandma|in-laws)\b/i.test(
+      contextText
+    );
+
+  if (!hasSupportRole && !hasPositiveSupportEvidence) {
     return null;
   }
 
@@ -749,7 +759,9 @@ function inferSupportCandidateFromSentence(sentence: SentenceSignal): JournalAna
   if (
     !sentence.roles.includes("supportive_context") &&
     !sentence.roles.includes("positive_event") &&
-    !/(great time|good time|enjoyed|enjoyable|comfort|comforting|helped|steadier|calmer|felt better|felt okay|felt more okay|warm|kind|soft|quiet|still|proud|excited|relieved|looking forward)/i.test(contextText)
+    !/(great time|good time|enjoyed|enjoyable|enjoyable company|comfort|comforting|helped|steadier|calmer|felt better|felt okay|felt more okay|warm|kind|soft|quiet|still|proud|excited|stoked|relieved|looking forward|delicious|fun|nice session|new book|straight a|straight as|learned|portfolio|competition|appointment|prom|nap was necessary|felt a lot better after)/i.test(
+      contextText
+    )
   ) {
     return null;
   }
@@ -758,7 +770,7 @@ function inferSupportCandidateFromSentence(sentence: SentenceSignal): JournalAna
   const seed =
     findMatch(
       contextText,
-      /\b(friend|friends|family|coffee|tea|meal|breakfast|lunch|dinner|quiet house|house was still|house was quiet|quiet room|sunlight|outside|fresh air|music|playlist|song|songs|dog|bookstore|book shop|library|cafe|restaurant|park|porch|gym|worked out|workout|walked|went for a walk|took a walk|finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|app|portfolio|project|competition|handshake|atlas journal|studio moonfall|gateway|plan(?:ned)?|schedule(?:d)?|nap|rested|napped)\b/i
+      /\b(friend|friends|family|mom|dad|sister|brother|parent|partner|coworker|grandma|grandmother|in-laws|coffee|tea|meal|breakfast|lunch|dinner|ice cream|big star|scoops|quiet house|house was still|house was quiet|quiet room|sunlight|outside|fresh air|music|playlist|song|songs|dog|pet|bookstore|book shop|library|cafe|restaurant|park|porch|gym|worked out|workout|walked|went for a walk|took a walk|finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|app|portfolio|project|competition|handshake|atlas journal|studio moonfall|gateway|prom|appointment|nap|rested|napped|fun|learned|book|plan(?:ned)?|schedule(?:d)?)\b/i
     ) || category;
 
   const label = normalizeSupportLabel(seed, contextText, category);
@@ -777,11 +789,11 @@ function inferSupportCandidateFromSentence(sentence: SentenceSignal): JournalAna
 
 function inferCopingCategoryFromText(text: string) {
   if (/\b(walk|walked|went for a walk|took a walk|gym|worked out|workout|run|ran|stretch|outside)\b/i.test(text)) return "movement";
-  if (/\b(called|texted|talked to|talked with|reached out|asked for help)\b/i.test(text)) return "connection";
+  if (/\b(called|texted|talked to|talked with|reached out|asked for help|spent time with)\b/i.test(text)) return "connection";
   if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(text)) return "self-regulation";
-  if (/\b(nap|napped|rested|rest)\b/i.test(text)) return "body care";
+  if (/\b(nap|napped|rested|rest|let myself rest|got some rest|needed the rest|breathe|breathing|breath)\b/i.test(text)) return "body care";
   if (/\b(coffee|tea|meal|breakfast|lunch|dinner|made|brewed|prepared|cooked)\b/i.test(text)) return "routine";
-  if (/\b(breathe|breathing|breath)\b/i.test(text)) return "body care";
+  if (/\b(plan(?:ned)?|schedule(?:d)?|appointment|prom|movie|date|outing|trip|fun)\b/i.test(text)) return "routine";
   return "presence";
 }
 
@@ -790,7 +802,7 @@ function inferCopingCandidateFromSentence(sentence: SentenceSignal): (JournalAna
 
   if (
     !sentence.roles.includes("intentional_coping") &&
-    !/(didn't rush|did not rush|took my time|slowed down|paused|pause|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|went for a walk|took a walk|reached out|called|texted|journaled|wrote it down|breathed|breathing|made coffee|made tea|prepared|took a nap|napped|rested|skipped the gym|planned|scheduled)/i.test(
+    !/(didn't rush|did not rush|took my time|slowed down|paused|pause|sat with|let it be|stayed with|didn't reach for distractions|did not reach for distractions|went for a walk|took a walk|reached out|called|texted|journaled|wrote it down|breathed|breathing|made coffee|made tea|prepared|took a nap|napped|rested|rest|let myself rest|got some rest|needed the rest|felt better after|ended up not going to the gym|skipped the gym|instead of pushing through|planned|scheduled|appointment|prom|fun)/i.test(
       contextText
     )
   ) {
@@ -826,7 +838,7 @@ function inferConceptualStressorEvent(sentence: SentenceSignal): EventSignal | n
   if (
     !indicatesActualStrain(sentence) &&
     !sentence.roles.includes("threat_or_harm") &&
-    !/(unsafe|scared|afraid|wrong|off|pressure|burden|heavy|too much|overload|looming|gnawing|haunting|unlatched|unlocked|open|bark|barking|tension|conflict|fight|threat)/i.test(
+    !/(unsafe|scared|afraid|wrong|off|pressure|burden|heavy|too much|overload|looming|gnawing|haunting|unlatched|unlocked|open|bark|barking|tension|conflict|fight|threat|disappointed|disappointing|tired|exhausted|drained|obnoxious|wouldn't stop|would not stop|kept barking|ran out|didn't happen|did not happen)/i.test(
       contextText
     )
   ) {
@@ -1186,32 +1198,64 @@ function normalizeSupportLabel(label: string, evidence: string, category: string
     return "time with friends";
   }
 
-  if (/(great time|good time|fun with|coffee with|lunch with|dinner with|spent time with|hung out with|went out with)/i.test(evidence) && /\b(sister|brother|mom|dad|family|parent)\b/i.test(evidence)) {
-    return "time with family";
+  if (/(great time|good time|fun with|coffee with|lunch with|dinner with|spent time with|hung out with|went out with|enjoyable company)/i.test(evidence) && /\b(sister|brother|mom|dad|family|parent|grandma|grandmother|in-laws)\b/i.test(evidence)) {
+    return "enjoyable company";
   }
 
-  if (/\b(finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|aced)\b/i.test(evidence)) return "academic achievement";
-  if (/\b(app|portfolio|project|build(?:ing)?|competition|Handshake|Atlas Journal|Studio Moonfall|Gateway)\b/i.test(evidence)) return "creative progress";
-  if (/\b(plan(?:ned)?|schedule(?:d)?)\b/i.test(evidence) && /\b(fun|hang|trip|movie|date|mall|outing)\b/i.test(evidence)) return "fun plan";
-  if (/\b(took a nap|napped|rested|got some rest|let myself rest)\b/i.test(evidence)) return "rest opportunity";
+  if (/\b(finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|aced)\b/i.test(evidence)) {
+    return "academic achievement";
+  }
+
+  if (/\b(app|portfolio|project|build(?:ing)?|competition|handshake|atlas journal|studio moonfall|gateway)\b/i.test(evidence)) {
+    return "creative progress";
+  }
+
+  if (/\b(plan(?:ned)?|schedule(?:d)?|appointment|prom)\b/i.test(evidence) && /\b(fun|hang|trip|movie|date|mall|outing|glammed up)\b/i.test(evidence)) {
+    return "fun plan";
+  }
+
+  if (/\b(took a nap|napped|rested|got some rest|let myself rest|needed the rest|felt better after|felt a lot better after)\b/i.test(evidence)) {
+    return "rest that helped";
+  }
+
   if (/\bquiet house\b/i.test(evidence)) return "quiet house";
-  if (/\b(bookstore|book shop)\b/i.test(evidence)) return "bookstore outing";
-  if (/\b(gym|worked out|workout)\b/i.test(evidence)) return "gym session";
+  if (/\bbookstore|book shop|studio moonfall\b/i.test(evidence)) return "bookstore outing";
+  if (/\b(gym|worked out|workout|nice session)\b/i.test(evidence)) return "gym session";
   if (/\b(walked the dog|walk with lily|walk with the dog)\b/i.test(evidence)) return "dog walk";
+
   if (/\b(walked|went for a walk|took a walk)\b/i.test(evidence) && /(clear my head|reset|outside|fresh air|felt better|steadier)/i.test(evidence)) {
     return "walking outside";
   }
+
   if (/\b(music|playlist|song|songs)\b/i.test(evidence)) return "music";
   if (/\b(sun|sunlight)\b/i.test(evidence)) return "sunlight";
-  if (/\b(outside|fresh air)\b/i.test(evidence) && !/\bwalk/i.test(evidence)) return "fresh air";
-  if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(evidence) && /\b(home|kitchen)\b/i.test(evidence)) return "meal at home";
-  if (/\b(coffee|tea)\b/i.test(evidence) && /(slow|quiet|didn't rush|did not rush|took my time|sat with)/i.test(evidence)) return "small ritual";
-  if (/\bdog\b/i.test(evidence) && /(calm|comfort|steady|present|better|grounded)/i.test(evidence)) return "dog presence";
-  if (/\b(still|quiet house|house was still|house was quiet)\b/i.test(evidence) && /(present|calm|steady|quiet|easier|better|relieved)/i.test(evidence)) return "quiet environment";
+  if (/\b(outside|fresh air)\b/i.test(evidence) && !/\bwalk\b/i.test(evidence)) return "fresh air";
+
+  if (/\b(food|meal|breakfast|lunch|dinner|ice cream|big star|scoops)\b/i.test(evidence) && /\b(home|kitchen|ate at home)\b/i.test(evidence)) {
+    return "meal at home";
+  }
+
+  if (/\b(food|meal|breakfast|lunch|dinner|ice cream|big star|scoops|delicious)\b/i.test(evidence)) {
+    return "meal with others";
+  }
+
+  if (/\b(coffee|tea)\b/i.test(evidence) && /(slow|quiet|didn't rush|did not rush|took my time|sat with)/i.test(evidence)) {
+    return "small ritual";
+  }
+
+  if (/\bdog\b/i.test(evidence) && /(calm|comfort|steady|present|better|grounded|adored her)/i.test(evidence)) {
+    return "dog presence";
+  }
+
+  if (/\b(still|quiet house|house was still|house was quiet)\b/i.test(evidence) && /(present|calm|steady|quiet|easier|better|relieved|breathe)/i.test(evidence)) {
+    return "quiet environment";
+  }
+
   if (category === "connection") return "social connection";
   if (category === "movement" && /\bwalk|outside|fresh air\b/i.test(evidence)) return "walking outside";
-  if (category === "accomplishment") return /\b(finals?|semester|exam|class|grades?|straight a|straight as|aced)\b/i.test(evidence) ? "academic achievement" : "meaningful progress";
-  if (category === "resolution") return /\b(took a nap|napped|rested)\b/i.test(evidence) ? "rest opportunity" : "";
+  if (category === "accomplishment") return /\b(finals?|semester|exam|class|grades?|straight a|straight as|aced)\b/i.test(evidence)
+    ? "academic achievement"
+    : "creative progress";
 
   return sanitizeBucketOutputLabel(normalizePromotedConcept(label, evidence, "support"), "support");
 }
@@ -1257,6 +1301,22 @@ function normalizeStressorLabel(label: string, evidence: string, category: strin
 
   if (category === "harm") {
     return "physical aggression";
+  }
+
+  if (/\b(ran out of hot water|no hot water|ran out)\b/i.test(evidence)) {
+  return "routine disruption";
+  }
+
+  if (/\b(tired|exhausted|drained)\b/i.test(evidence) && /\b(staying up|sleep|working on the app|working late)\b/i.test(evidence)) {
+    return "fatigue";
+  }
+
+  if (/\b(obnoxious|wouldn't stop|would not stop|kept barking|barking the whole time)\b/i.test(evidence) && /\b(dog|dogs|lily)\b/i.test(evidence)) {
+    return "dog barking disruption";
+  }
+
+  if (/\b(disappointed|disappointing|let down)\b/i.test(evidence)) {
+    return "disappointment";
   }
 
   return sanitizeBucketOutputLabel(normalized, "stressor");
@@ -1404,10 +1464,14 @@ function getCheckInInterpretationProfile(checkIns?: UserCheckIns) {
 function describeCopingAction(label: string, evidence: string, category: string) {
   const normalizedEvidence = evidence.toLowerCase();
 
-  if (/took a nap|napped|rested|got some rest|let myself rest/i.test(evidence)) {
-    return /skipped the gym|instead/i.test(normalizedEvidence)
+  if (/took a nap|napped|rested|got some rest|let myself rest|needed the rest/i.test(evidence)) {
+    return /skipped the gym|instead|ended up not going to the gym/i.test(normalizedEvidence)
       ? "chose rest instead of pushing through"
       : "took a nap to recover";
+  }
+
+  if (/felt better after/i.test(evidence)) {
+    return "let rest help the body recover";
   }
 
   if (/didn't rush|did not rush|slowed down|took my time/i.test(evidence)) {
@@ -1431,7 +1495,7 @@ function describeCopingAction(label: string, evidence: string, category: string)
   }
 
   if (/walk|run|gym|stretch|outside/i.test(evidence)) {
-    return /clear my head|reset|steady/i.test(normalizedEvidence)
+    return /clear my head|reset|steady|nice session/i.test(normalizedEvidence)
       ? "used movement to regulate"
       : "turned toward movement to regulate";
   }
@@ -1440,7 +1504,7 @@ function describeCopingAction(label: string, evidence: string, category: string)
     return "reached toward connection instead of holding it alone";
   }
 
-  if (/\b(plan(?:ned)?|schedule(?:d)?|appointment)\b/i.test(evidence) && /\b(fun|movie|date|hang out|outing|trip|prom)\b/i.test(evidence)) {
+  if (/\b(plan(?:ned)?|schedule(?:d)?|appointment)\b/i.test(evidence) && /\b(fun|movie|date|hang out|outing|trip|prom|glammed up)\b/i.test(evidence)) {
     return "made a positive plan to look forward to";
   }
 
@@ -1452,8 +1516,7 @@ function describeCopingAction(label: string, evidence: string, category: string)
     return "used focused work to channel momentum";
   }
 
-  const compact = sanitizeBucketOutputLabel(label.toLowerCase(), "coping");
-  return compact || "";
+  return "";
 }
 
 function describeRestorativeMoment(value: string, evidence: string) {
@@ -1504,8 +1567,15 @@ function scorePromotedSupport(item: JournalAnalysis["supports"][number]) {
 
 function scorePromotedStressor(item: JournalAnalysis["stressors"][number]) {
   let score = item.intensity / 3;
-  if (/(unsafe|threat|wrong|scared|afraid|fight|hostile|burden|pressure|overload|pain|went wrong)/i.test(item.evidence)) score += 1.2;
-  if (/(family concern|relationship conflict|work pressure|financial strain|money stress|physical strain|home safety scare)/i.test(item.label)) score += 0.5;
+
+  if (/(unsafe|threat|wrong|scared|afraid|fight|hostile|burden|pressure|overload|pain|went wrong|disappointed|tired|exhausted|drained|obnoxious|wouldn't stop|would not stop|kept barking)/i.test(item.evidence)) {
+    score += 1.2;
+  }
+
+  if (/(family concern|relationship conflict|work pressure|financial strain|money stress|physical strain|home safety scare|dog barking disruption|routine disruption|fatigue|disappointment)/i.test(item.label)) {
+    score += 0.7;
+  }
+
   return score;
 }
 
@@ -1536,11 +1606,11 @@ function scoreCopingAction(action: string, evidence: string, impact: string) {
   if (impact === "helpful") score += 0.8;
   if (impact === "neutral") score += 0.25;
 
-  if (/didn't rush|did not rush|took my time|slowed down|paused|pause|sat with|let it be|stayed with|breath|breathe|took a nap|napped|rested|scheduled|planned|went to the gym|worked out|walk/i.test(evidence)) {
-    score += 1.05;
+  if (/didn't rush|did not rush|took my time|slowed down|paused|pause|sat with|let it be|stayed with|breath|breathe|took a nap|napped|rested|rest|felt better after|scheduled|planned|appointment|went to the gym|worked out|walk/i.test(evidence)) {
+    score += 1.1;
   }
 
-  if (/slowed down on purpose|paused instead of reacting immediately|stayed with the feeling without trying to force it away|used attention to orient to the moment|used breathing to steady the moment|used movement to regulate|reached toward connection instead of holding it alone|made a positive plan to look forward to|used a quiet routine to steady the moment|used focused work to channel momentum|chose rest instead of pushing through|took a nap to recover/i.test(action)) {
+  if (/slowed down on purpose|paused instead of reacting immediately|stayed with the feeling without trying to force it away|used attention to orient to the moment|used breathing to steady the moment|used movement to regulate|reached toward connection instead of holding it alone|made a positive plan to look forward to|used a quiet routine to steady the moment|used focused work to channel momentum|chose rest instead of pushing through|took a nap to recover|let rest help the body recover/i.test(action)) {
     score += 1.0;
   }
 
@@ -1548,9 +1618,9 @@ function scoreCopingAction(action: string, evidence: string, impact: string) {
 }
 
 function scoreSubtleCopingAction(action: string, evidence: string, impact: string) {
-  let score = scoreCopingAction(action, evidence, impact) - 0.3;
+  let score = scoreCopingAction(action, evidence, impact) - 0.25;
 
-  if (/didn't rush|did not rush|took my time|slowed down|paused|sat with|let it be|did not reach for distractions|didn't reach for distractions|took a nap|rested|scheduled|planned|went to the gym|worked out/i.test(evidence)) {
+  if (/didn't rush|did not rush|took my time|slowed down|paused|sat with|let it be|did not reach for distractions|didn't reach for distractions|took a nap|rested|felt better after|scheduled|planned|appointment|went to the gym|worked out/i.test(evidence)) {
     score += 0.45;
   }
 
@@ -1785,7 +1855,20 @@ function sanitizeAnalysisOutput(analysis: JournalAnalysis): JournalAnalysis {
     primary_emotion: primaryEmotion,
     secondary_emotions: secondaryEmotions,
     supports,
-    coping_actions: copingActions,
+    coping_actions: copingActions
+  .map((item) => {
+    const cleanAction = sanitizeBucketOutputLabel(item.action, "coping");
+    const cleanImpact = normalizeCopingImpact(item.impact);
+
+    return {
+      ...item,
+      action: cleanAction,
+      label: cleanAction,
+      impact: cleanImpact
+    };
+  })
+  .filter((item) => Boolean(item.action))
+  .slice(0, 2),
     restorative_signals: restorativeSignals,
     stressors,
     recurring_topics: recurringTopics,
@@ -2123,7 +2206,7 @@ function getCentralSentences(sentences: SentenceSignal[]) {
         scoreSentenceStrength(sentence) +
         (sentence.restorativeCue ? 0.6 : 0) +
         (sentence.conflict ? 0.8 : 0) +
-        (/(overwhelmed|anxious|drained|angry|sad|numb|relieved|grateful|hopeful|steady|steadier|ashamed|frustrated)/i.test(sentence.sentence) ? 0.45 : 0)
+        (/(overwhelmed|anxious|drained|angry|sad|numb|relieved|grateful|hopeful|steady|present)/i.test(sentence.sentence) ? 0.45 : 0)
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
@@ -2341,168 +2424,27 @@ function extractStressors(_rawText: string, sentences: SentenceSignal[]) {
   ];
 }
 
-function getSupportCandidate(sentence: SentenceSignal): JournalAnalysis["supports"][number] | null {
-  if (hasNegativeContext(sentence) && !hasRestorativeOutcome(sentence)) {
-    return null;
-  }
 
-  const sentenceText = sentence.sentence;
-  const normalized = sentence.normalized;
-  const explicitRelief = hasRestorativeOutcome(sentence);
-
-  if ((/took .*dog.*walk|walked the dog|walk with .*dog|dog for a walk/i.test(sentenceText) || (normalized.includes("walk") && normalized.includes("dog"))) && !hasNegativeContext(sentence)) {
-    return {
-      label: "walk with the dog",
-      category: "routine",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence)
-    };
-  }
-
-  if ((/went for a walk|took a walk|went outside for a walk|walked outside/i.test(sentenceText) || (normalized.includes("walk") && !likelyIncidentalMovementMarkers.some((marker) => normalized.includes(marker)))) && explicitRelief && !hasNegativeContext(sentence)) {
-    return {
-      label: findMatchedText(sentenceText, /went for a walk|took a walk|went outside for a walk|walked outside/i) || "walk",
-      category: "routine",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence)
-    };
-  }
-
-  if (/(deep breath|deep breaths|breathing|breathed|took a breath|took a few breaths)/i.test(sentenceText) && (explicitRelief || /pause|paused|moment/i.test(sentenceText))) {
-    return {
-      label: findMatchedText(sentenceText, /deep breath|deep breaths|breathing|breathed|took a breath|took a few breaths/i) || "breathing",
-      category: "self-regulation",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence)
-    };
-  }
-
-  if (/(stretch|stretching|stretched)/i.test(sentenceText) && explicitRelief) {
-    return {
-      label: findMatchedText(sentenceText, /stretch|stretching|stretched/i) || "stretching",
-      category: "body care",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence)
-    };
-  }
-
-  if (/(sat outside|went outside|opened the window|sunlight|sun|fresh air)/i.test(sentenceText) && explicitRelief) {
-    return {
-      label: findMatchedText(sentenceText, /sat outside|went outside|opened the window|sunlight|sun|fresh air/i) || "outside time",
-      category: "environment",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence)
-    };
-  }
-
-  if (/(talked with|talked to|called|texted|spent time with)/i.test(sentenceText) && /(friend|partner|mom|dad|sister|brother|family)/i.test(sentenceText) && explicitRelief) {
-    return {
-      label: findMatchedText(sentenceText, /talked with|talked to|called|texted|spent time with/i) || "connection",
-      category: "connection",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence)
-    };
-  }
-
-  if (
-    /(coffee with|dinner with|lunch with|hung out with|spent time with|went out with|sat with|talked with|talked to|called|texted)/i.test(sentenceText) &&
-    /(friend|partner|mom|dad|sister|brother|family|coworker)/i.test(sentenceText) &&
-    (hasPositiveExperience(sentence) || !hasNegativeContext(sentence))
-  ) {
-    return {
-      label: findMatchedText(sentenceText, /coffee with|dinner with|lunch with|hung out with|spent time with|went out with|sat with|talked with|talked to|called|texted/i) || "social connection",
-      category: "connection",
-      evidence: sentenceText,
-      impact: hasPositiveExperience(sentence) ? "validating" : classifySupportImpact(sentence)
-    };
-  }
-
-  if (
-    /(walk|run|ran|worked out|gym|hike|danced|dancing|bike|biked|swam|swimming)/i.test(sentenceText) &&
-    !likelyIncidentalMovementMarkers.some((marker) => normalized.includes(marker)) &&
-    (explicitRelief || hasPositiveExperience(sentence)) &&
-    !hasNegativeContext(sentence)
-  ) {
-    return {
-      label: findMatchedText(sentenceText, /walk|run|ran|worked out|gym|hike|danced|dancing|bike|biked|swam|swimming/i) || "movement",
-      category: "movement",
-      evidence: sentenceText,
-      impact: /(energized|energising|energizing|alive)/i.test(sentenceText) ? "energizing" : "helpful"
-    };
-  }
-
-  if (
-    accomplishmentMarkers.some((marker) => normalized.includes(marker)) &&
-    !hasNegativeContext(sentence)
-  ) {
-    return {
-      label: findMatchedText(sentenceText, /finished|completed|got it done|wrapped up|followed through|made progress|crossed off|cleaned|submitted|figured it out|solved/i) || "accomplishment",
-      category: "accomplishment",
-      evidence: sentenceText,
-      impact: "helpful"
-    };
-  }
-
-  if (
-    /(finally|ended up|turned out|worked out|resolved|sorted out|got fixed)/i.test(sentenceText) &&
-    (explicitRelief || hasPositiveExperience(sentence)) &&
-    !hasNegativeContext(sentence)
-  ) {
-    return {
-      label: findMatchedText(sentenceText, /finally|ended up|turned out|worked out|resolved|sorted out|got fixed/i) || "resolution",
-      category: "resolution",
-      evidence: sentenceText,
-      impact: "helpful"
-    };
-  }
-
-  if (
-    hasPositiveExperience(sentence) &&
-    /(music|sun|sunlight|outside|coffee|meal|breakfast|dinner|lunch|movie|show|book|game)/i.test(sentenceText) &&
-    !hasNegativeContext(sentence)
-  ) {
-    return {
-      label: findMatchedText(sentenceText, /music|sun|sunlight|outside|coffee|meal|breakfast|dinner|lunch|movie|show|book|game/i) || "positive experience",
-      category: "comfort",
-      evidence: sentenceText,
-      impact: classifySupportImpact(sentence) === "mixed" ? "helpful" : classifySupportImpact(sentence)
-    };
-  }
-
-  if (/\bdog\b/i.test(sentenceText) && /(calm|calmer|steady|steadier|comfort|comforting|soft|grounded|present|better)/i.test(sentenceText) && !hasNegativeContext(sentence)) {
-    return {
-      label: "dog presence",
-      category: "comfort",
-      evidence: sentenceText,
-      impact: "grounding"
-    };
-  }
-
-  if (/(made|brewed|prepared).*(coffee|tea)|(coffee|tea).*(didn't rush|did not rush|slowly|quietly|took my time)/i.test(sentenceText) && !hasNegativeContext(sentence)) {
-    return {
-      label: "small stabilizing ritual",
-      category: "routine",
-      evidence: sentenceText,
-      impact: "grounding"
-    };
-  }
-
-  return null;
-}
 
 function extractSupports(_rawText: string, sentences: SentenceSignal[]) {
   const matches: Array<JournalAnalysis["supports"][number] & { weight: number }> = [];
 
   for (const sentence of sentences) {
-    const candidate = getSupportCandidate(sentence);
+    const candidate = inferSupportCandidateFromSentence(sentence);
 
     if (!candidate) {
       continue;
     }
 
     const existing = matches.find((item) => item.label.toLowerCase() === candidate.label.toLowerCase());
-    const weight = scoreSentenceStrength(sentence) + (hasRestorativeOutcome(sentence) ? 0.9 : 0);
-
+    const weight =
+      scoreSentenceStrength(sentence) +
+      (hasRestorativeOutcome(sentence) ? 0.9 : 0) +
+      (sentence.roles.includes("supportive_context") ? 0.45 : 0) +
+      (sentence.roles.includes("positive_event") ? 0.35 : 0) +
+      (/\b(great time|good time|enjoyable|delicious|proud|excited|stoked|felt better after|comforting|safe|meaningful|new book|straight a|straight as|portfolio|competition|appointment|prom|meal|dinner|lunch|coffee|sister|friends|family)\b/i.test(sentence.sentence)
+        ? 0.45
+        : 0);
     if (existing) {
       existing.weight = Math.max(existing.weight, weight);
       continue;
@@ -2671,13 +2613,18 @@ function extractEvents(entry: string) {
     const positiveExperience = hasPositiveExperience(sentence);
     const negativeContext = hasNegativeContext(sentence);
     const stressorCountBefore = events.length;
+    const hostileOrViolentContext =
+      isConflict(sentence) ||
+      isViolentHitContext(contextText) ||
+      /\b(punched|punch|slapped|slap|kicked|kick|assault|shoved|threatened|fight|fighting|yelled|screamed|revenge|worth it)\b/i.test(contextText);
     const liminalWithoutDistress =
       liminalMarkers.some((marker) => sentence.normalized.includes(marker)) &&
       !negativeContext &&
       !hasDisruptionSignal(sentence) &&
       !/(panic|terrified|unsafe|argument|fight|threat|rage|furious)/i.test(sentence.sentence);
 
-    if (/(made|brewed).*(coffee|tea)|(coffee|tea).*(slowly|quietly|didn't rush|did not rush|took my time)/i.test(contextText) && !negativeContext) {
+    if (/(made|brewed).*(coffee|tea)|(coffee|tea).*(slowly|quietly|didn't rush|did not rush|took my time)/i.test(contextText) && !negativeContext &&
+      !hostileOrViolentContext) {
       events.push({
         label: "made coffee slowly",
         category: "routine",
@@ -2690,7 +2637,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/(noticed|watched|listened to|heard|felt).*(light|sunlight|sound|birds|wind|body|breath|window)/i.test(sentence.sentence)) {
+    if (/(noticed|watched|listened to|heard|felt).*(light|sunlight|sound|birds|wind|body|breath|window)/i.test(sentence.sentence)&&
+      !hostileOrViolentContext) {
       events.push({
         label: "noticed the environment",
         category: "presence",
@@ -2703,7 +2651,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (sentence.roles.includes("intentional_coping") && !negativeContext) {
+    if (sentence.roles.includes("intentional_coping") && !negativeContext&&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(sentence.sentence, /didn't rush|did not rush|took my time|slowed down|slowly|quietly|maybe that's enough|more present|sat with it|let it be/i) || "intentional slowing",
         category: "self-regulation",
@@ -2716,7 +2665,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/(coffee with|dinner with|lunch with|hung out with|spent time with|went out with|talked with|talked to|called|texted)/i.test(sentence.sentence) && /(friend|partner|mom|dad|sister|brother|family|coworker)/i.test(sentence.sentence)) {
+    if (/(coffee with|dinner with|lunch with|hung out with|spent time with|went out with|talked with|talked to|called|texted)/i.test(sentence.sentence) && /(friend|partner|mom|dad|sister|brother|family|coworker)/i.test(sentence.sentence) &&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(sentence.sentence, /coffee with|dinner with|lunch with|hung out with|spent time with|went out with|talked with|talked to|called|texted/i) || "social connection",
         category: "connection",
@@ -2729,7 +2679,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (sentence.roles.includes("supportive_context") && /\b(house was still|house was quiet|quiet room|quiet house)\b/i.test(contextText) && !negativeContext) {
+    if (sentence.roles.includes("supportive_context") && /\b(house was still|house was quiet|quiet room|quiet house)\b/i.test(contextText) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(contextText, /\b(house was still|house was quiet|quiet room|quiet house)\b/i) || "quiet environment",
         category: "environment",
@@ -2742,7 +2693,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (sentence.roles.includes("supportive_context") && /\bdog\b/i.test(contextText) && /(nearby|next to me|beside me|with me|curled up|quiet|calm)/i.test(contextText) && !negativeContext) {
+    if (sentence.roles.includes("supportive_context") && /\bdog\b/i.test(contextText) && /(nearby|next to me|beside me|with me|curled up|quiet|calm)/i.test(contextText) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: "dog presence",
         category: "comfort",
@@ -2755,7 +2707,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i.test(contextText) && (positiveExperience || explicitRelief || gentleRegulation || sentence.roles.includes("supportive_context")) && !negativeContext) {
+    if (/\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i.test(contextText) && (positiveExperience || explicitRelief || gentleRegulation || sentence.roles.includes("supportive_context")) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(contextText, /\b(bookstore|book shop|library|cafe|restaurant|park|porch|quiet house)\b/i) || "supportive environment",
         category: "environment",
@@ -2768,7 +2721,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(music|playlist|song|songs)\b/i.test(contextText) && (positiveExperience || explicitRelief || gentleRegulation || sentence.roles.includes("supportive_context")) && !negativeContext) {
+    if (/\b(music|playlist|song|songs)\b/i.test(contextText) && (positiveExperience || explicitRelief || gentleRegulation || sentence.roles.includes("supportive_context")) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(contextText, /\b(music|playlist|song|songs)\b/i) || "music",
         category: "comfort",
@@ -2781,7 +2735,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(contextText) && (positiveExperience || gentleRegulation || explicitRelief || sentence.roles.includes("supportive_context")) && !negativeContext) {
+    if (/\b(food|meal|breakfast|lunch|dinner)\b/i.test(contextText) && (positiveExperience || gentleRegulation || explicitRelief || sentence.roles.includes("supportive_context")) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(contextText, /\b(food|meal|breakfast|lunch|dinner)\b/i) || "meal",
         category: "routine",
@@ -2794,7 +2749,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(contextText) && !negativeContext) {
+    if (/\b(journaled|wrote it down|wrote it out|writing this|journal entry)\b/i.test(contextText) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: "journaled it out",
         category: "self-regulation",
@@ -2807,7 +2763,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(took a nap|napped|rested|got some rest|let myself rest)\b/i.test(contextText) && !negativeContext) {
+    if (/\b(took a nap|napped|rested|got some rest|let myself rest)\b/i.test(contextText) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: "rest opportunity",
         category: "routine",
@@ -2820,7 +2777,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/\b(plan(?:ned)?|schedule(?:d)?)\b/i.test(contextText) && /\b(fun|movie|trip|hang|date|outing|mall)\b/i.test(contextText) && !negativeContext) {
+    if (/\b(plan(?:ned)?|schedule(?:d)?)\b/i.test(contextText) && /\b(fun|movie|trip|hang|date|outing|mall)\b/i.test(contextText) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: "fun plan",
         category: "connection",
@@ -2833,7 +2791,9 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/(walked|went for a walk|took a walk|ran|run|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam)/i.test(sentence.sentence) && !likelyIncidentalMovementMarkers.some((marker) => sentence.normalized.includes(marker))) {
+    if (/(walked|went for a walk|took a walk|ran|run|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam)/i.test(sentence.sentence) && !likelyIncidentalMovementMarkers.some((marker) => sentence.normalized.includes(marker)) &&
+      !hostileOrViolentContext
+    ) {
       events.push({
         label: findMatch(sentence.sentence, /walked the dog|went for a walk|took a walk|run|ran|hiked|stretch(ed|ing)?|worked out|gym|bike(d)?|swam/i) || "movement",
         category: "movement",
@@ -2846,7 +2806,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (hasAny(sentence, accomplishmentMarkers) && !negativeContext) {
+    if (hasAny(sentence, accomplishmentMarkers) && !negativeContext &&
+    !hostileOrViolentContext) {
       events.push({
         label: findMatch(sentence.sentence, /finished|completed|got it done|wrapped up|followed through|made progress|crossed off|cleaned|submitted|figured it out|solved/i) || "accomplishment",
         category: "accomplishment",
@@ -2859,7 +2820,8 @@ function extractEvents(entry: string) {
       });
     }
 
-    if (/(finally|ended up|turned out|worked out|resolved|sorted out|got fixed)/i.test(sentence.sentence) && !hasNegativeContext(sentence)) {
+    if (/(finally|ended up|turned out|worked out|resolved|sorted out|got fixed)/i.test(sentence.sentence) && !hasNegativeContext(sentence) &&
+   !hostileOrViolentContext) {
       events.push({
         label: findMatch(sentence.sentence, /finally|ended up|turned out|worked out|resolved|sorted out|got fixed/i) || "resolution",
         category: "resolution",
@@ -2872,8 +2834,11 @@ function extractEvents(entry: string) {
       });
     }
 
+    const negatedPressure =
+      /\b(no pressure|not pressure|without pressure|no need to rush|no need to hurry|nowhere to be|nothing pressing)\b/i.test(contextText);
+
     const explicitStressorMatch =
-      ((/(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)/i.test(
+      !negatedPressure && ((/(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)/i.test(
         contextText
       ) || isViolentHitContext(contextText)) &&
       !isNegatedOrQualified(sentence, /\b(refund call|money conversation|deadline|manager|meeting|migraine|pain|rough night of sleep|pressure|overloaded|overload|punched|punch|slapped|slap|kicked|kick|assault|threatened|revenge|worth it|door was open|door was unlocked|door was unlatched|front door was open|front door was unlocked|front door was unlatched)\b/i));
@@ -2914,7 +2879,7 @@ function extractEvents(entry: string) {
       }
     }
 
-    if (events.length === stressorCountBefore) {
+    if (events.length === stressorCountBefore && !negatedPressure) {
       const inferredStressor = inferConceptualStressorEvent(sentence);
       if (inferredStressor) {
         events.push(inferredStressor);
@@ -3213,9 +3178,11 @@ function detectSupportsAndCoping(_entry: string, eventsResult: ReturnType<typeof
             label: action,
             evidence,
             action,
-            impact: (/breath|present|steady|didn't rush|did not rush|took my time|slowed down|let it be|sat with|stayed with|paused/i.test(evidence)
-              ? "grounding"
-              : "helpful") as JournalAnalysis["coping_actions"][number]["impact"]
+            impact: normalizeCopingImpact(
+              /breath|present|steady|didn't rush|did not rush|took my time|slowed down|let it be|sat with|stayed with|paused/i.test(evidence)
+                ? "grounding"
+                : "helpful"
+            )
           };
         })
     ].filter((item) => Boolean(item.action))
@@ -3598,7 +3565,9 @@ function synthesizeInterpretation(
   else if (supports.length > 0 && negativeWeight < positiveWeight) primaryEmotion = supports.some((item) => item.impact === "grounding") ? "grounded" : "relieved";
   else if (stressors.length > 0 && negativeWeight > positiveWeight + 0.8) primaryEmotion = centralSignals.find((label) => !["present", "steady", "reflective"].includes(label)) ?? primaryEmotion;
   else if (isMeaningfulDiscomfort(sentences[Math.min(1, Math.max(0, sentences.length - 1))] ?? sentences[0])) primaryEmotion = signals.some((signal) => signal.label === "emotionally honest") ? "emotional honesty" : "tender";
-
+  else if (!primaryEmotion && positiveWeight >= negativeWeight) {
+    primaryEmotion = "present";
+  }
   if (
     checkInProfile.highStress &&
     !acuteRiskWeight &&
