@@ -191,6 +191,8 @@ select {
 .nav-button {
   padding: 8px 12px;
   border-radius: 999px;
+  white-space: normal;
+  text-align: center;
   transition: color 180ms ease, background 180ms ease, transform 180ms ease;
 }
 
@@ -386,6 +388,22 @@ select {
   gap: 18px;
 }
 
+.demo-sandbox-layout {
+  width: 100%;
+  align-items: start;
+}
+
+.demo-sandbox-layout > *,
+.demo-sandbox-main,
+.demo-sandbox-sidecar,
+.demo-sandbox-result-block,
+.demo-sandbox-cta-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
 .page,
 .hero,
 .topbar,
@@ -566,6 +584,8 @@ select {
   align-items: center;
   justify-content: center;
   max-width: 100%;
+  white-space: normal;
+  text-align: center;
   border-radius: 999px;
   padding: 13px 20px;
   border: 0;
@@ -663,6 +683,11 @@ select {
   margin-bottom: 0;
 }
 
+.section-title-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .section-hint {
   position: relative;
   display: inline-flex;
@@ -736,6 +761,7 @@ select {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .field-label {
@@ -888,6 +914,8 @@ select {
 
 .results-panel {
   padding: 24px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .detail-panel {
@@ -921,6 +949,8 @@ select {
 .stat-chip span {
   color: var(--muted);
   font-size: 0.78rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .tag {
@@ -928,6 +958,14 @@ select {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+  white-space: normal;
+}
+
+.results-stat-grid > *,
+.results-tag-row > *,
+.results-stack-item,
+.stack-item-copy {
+  min-width: 0;
 }
 
 .tag-link {
@@ -984,6 +1022,8 @@ select {
 .stack-item span {
   color: var(--muted);
   text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .stack-subcopy {
@@ -1407,6 +1447,10 @@ select {
   gap: 10px;
   flex-wrap: wrap;
   color: var(--muted-strong);
+}
+
+.analysis-pulse > * {
+  min-width: 0;
 }
 
 .analysis-dot {
@@ -1839,6 +1883,12 @@ select {
   gap: 8px;
 }
 
+.checkin-scale span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .checkin-scale span:nth-child(2) {
   text-align: center;
 }
@@ -2045,6 +2095,18 @@ select {
     min-width: 0;
   }
 
+  .results-grid-mobile-safe {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-panel {
+    grid-column: 1 / -1;
+  }
+
+  .results-stat-grid {
+    width: 100%;
+  }
+
   .stack-item {
     flex-direction: column;
   }
@@ -2109,6 +2171,12 @@ select {
   .checkin-scale {
     font-size: 0.72rem;
     gap: 6px;
+  }
+
+  .floating-action {
+    width: 52px;
+    height: 52px;
+    font-size: 1.8rem;
   }
 }
 

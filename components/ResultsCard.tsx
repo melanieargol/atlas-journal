@@ -22,7 +22,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 function SectionTitle({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="section-title-row">
-      <p className="section-label">{title}</p>
+      <p className="section-label section-title-copy">{title}</p>
       <span className="section-hint" title={hint} aria-label={hint} tabIndex={0}>
         <span aria-hidden="true">i</span>
         <span className="section-tooltip" role="tooltip">
@@ -85,7 +85,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
   const isModerateConcern = safetyLevel === "moderate";
 
   return (
-    <section className="panel results-panel reveal-group">
+    <section className="panel results-panel results-panel-mobile-safe reveal-group">
       {isHighConcern ? <div className="safety-veil" aria-hidden="true" /> : null}
       <SafetySupportCard assessment={analysis.safety_assessment} />
 
@@ -97,7 +97,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
       </div>
 
       {isHighConcern ? (
-        <div className="results-grid">
+        <div className="results-grid results-grid-mobile-safe">
           <article className="detail-panel detail-panel-strong reveal-panel">
             <SectionTitle
               title="Support first"
@@ -126,7 +126,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
           <article className="detail-panel reveal-panel">
             <SectionTitle title="Summary" hint="A grounded synthesis of what shaped the entry, including strain, support, and how the tone landed." />
             <p>{analysis.summary}</p>
-            <div className="chip-row">
+            <div className="chip-row results-stat-grid">
               <Stat label="Primary emotion" value={analysis.primary_emotion} />
               <Stat label={analysis.user_mood !== null ? "Mood check-in" : "Mood"} value={`${displayMood}/10`} />
               <Stat label={analysis.user_stress !== null ? "Stress check-in" : "Stress"} value={`${displayStress}/10`} />
@@ -157,7 +157,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
               </div>
             </div>
             <p className="muted-text shift-caption">Movement: {analysis.emotional_shift.direction}</p>
-            <div className="tag-row">
+            <div className="tag-row results-tag-row">
               {analysis.secondary_emotions.map((item) => (
                 <span key={item} className="tag">
                   {item}
@@ -174,8 +174,8 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
             <div className="stack-list">
               {analysis.stressors.length > 0 ? (
                 analysis.stressors.map((item, index) => (
-                  <div key={`${item.label}-${index}`} className="stack-item">
-                    <div>
+                  <div key={`${item.label}-${index}`} className="stack-item results-stack-item">
+                    <div className="stack-item-copy">
                       <strong>{item.label}</strong>
                       <p className="stack-subcopy">{item.evidence}</p>
                     </div>
@@ -198,8 +198,8 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
             <div className="stack-list">
               {analysis.supports.length > 0 ? (
                 analysis.supports.map((item, index) => (
-                  <div key={`${item.label}-${index}`} className="stack-item">
-                    <div>
+                  <div key={`${item.label}-${index}`} className="stack-item results-stack-item">
+                    <div className="stack-item-copy">
                       <strong>{item.label}</strong>
                       <p className="stack-subcopy">{item.evidence}</p>
                     </div>
@@ -222,7 +222,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
             <div className="stack-list">
               {analysis.coping_actions.length > 0 ? (
                 analysis.coping_actions.map((item, index) => (
-                  <div key={`${item.action}-${index}`} className="stack-item">
+                  <div key={`${item.action}-${index}`} className="stack-item results-stack-item">
                     <strong>{item.action}</strong>
                     <span>{item.impact}</span>
                   </div>
@@ -238,7 +238,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
               title="Entry topics"
               hint="What this entry is mainly about."
             />
-            <div className="tag-row">
+            <div className="tag-row results-tag-row">
               {analysis.recurring_topics.length > 0 ? (
                 analysis.recurring_topics.map((item) => (
                   <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
@@ -273,7 +273,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
                 title="Restorative moments"
                 hint="Internal moments of settling, clarity, or grounding."
               />
-              <div className="tag-row">
+              <div className="tag-row results-tag-row">
                 {analysis.restorative_signals.length > 0 ? (
                   analysis.restorative_signals.slice(0, 3).map((item) => (
                     <span key={item} className="tag">
@@ -296,8 +296,8 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
               <div className="stack-list">
                 {analysis.evidence_spans.length > 0 ? (
                   analysis.evidence_spans.slice(0, 5).map((item, index) => (
-                    <div key={`${item.label}-${index}`} className="stack-item">
-                      <div>
+                    <div key={`${item.label}-${index}`} className="stack-item results-stack-item">
+                      <div className="stack-item-copy">
                         <strong>{item.label}</strong>
                         <p className="stack-subcopy">{item.text}</p>
                       </div>
@@ -343,7 +343,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
               title="Custom emotion language"
               hint="Emotion wording preserved from the entry when it adds useful nuance beyond the headline emotion."
             />
-            <div className="tag-row">
+              <div className="tag-row results-tag-row">
               {analysis.custom_emotion_terms.length > 0 ? (
                 analysis.custom_emotion_terms.map((item) => (
                   <span key={item} className="tag">

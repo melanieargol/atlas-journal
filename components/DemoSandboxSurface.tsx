@@ -294,7 +294,7 @@ export function DemoSandboxSurface({
         ) : null}
       </section>
 
-      <section className="panel intro-panel demo-sandbox-sidecar reveal-panel">
+      <section className="panel demo-sandbox-sidecar reveal-panel">
         <p className="section-label">Also in demo mode</p>
         <h2>See how Atlas looks across time with sample history.</h2>
         <p className="muted-text">
@@ -312,7 +312,7 @@ export function DemoSandboxSurface({
 
       {analysis ? (
         <>
-          <div key={resultVersion} className="reveal-panel">
+          <div key={resultVersion} className="reveal-panel demo-sandbox-result-block">
             <ResultsCard analysis={analysis} archiveBasePath="/demo/archive" linkTags={false} />
           </div>
 
