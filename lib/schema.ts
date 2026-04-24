@@ -126,6 +126,16 @@ export const analyzeEntryInputSchema = z.object({
   user_energy: optionalCheckInSchema.optional()
 });
 
+export const demoAnalyzeEntryInputSchema = z.object({
+  raw_text: z
+    .string()
+    .min(20, "Write a little more so Atlas Journal has enough context to analyze.")
+    .max(3000, "Demo entries are limited to 3,000 characters so the sandbox stays quick and private."),
+  user_mood: optionalCheckInSchema.optional(),
+  user_stress: optionalCheckInSchema.optional(),
+  user_energy: optionalCheckInSchema.optional()
+});
+
 export const updateEntryInputSchema = z.object({
   raw_text: z.string().min(20, "Write a little more so Atlas Journal has enough context to analyze."),
   entry_date: z.string().date(),

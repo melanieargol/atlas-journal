@@ -17,7 +17,7 @@ const emotionLexicon = [
   { label: "angry", words: ["angry", "furious", "rage", "resentful", "hostile"], tone: -3 },
   { label: "frustrated", words: ["frustrated", "annoyed", "irritated"], tone: -2 },
   { label: "drained", words: ["drained", "exhausted", "spent", "wiped"], tone: -2 },
-  { label: "sad", words: ["sad", "down", "heavy", "low"], tone: -2 },
+  { label: "sad", words: ["sad", "down", "heavy", "heartbroken", "felt sad"], tone: -2 },
   { label: "numb", words: ["numb", "flat", "blank", "shut down"], tone: -2 },
   { label: "grieving", words: ["grief", "grieving", "mourning", "loss"], tone: -3 },
   { label: "ashamed", words: ["ashamed", "embarrassed", "humiliated"], tone: -2 },
@@ -36,7 +36,7 @@ const explicitEmotionLexicon = [
   { label: "tense", regex: /\btense|pressure|tight|stressed\b/i, tone: "negative", score: 1.8 },
   { label: "angry", regex: /\bangry|furious|rage|resentful|hostile\b/i, tone: "negative", score: 2.2 },
   { label: "frustrated", regex: /\bfrustrated|annoyed|irritated\b/i, tone: "negative", score: 1.8 },
-  { label: "sad", regex: /\bsad|low|heavy\b/i, tone: "negative", score: 1.8 },
+  { label: "sad", regex: /\bsad|heartbroken|felt sad|a little down|heavy\b/i, tone: "negative", score: 1.8 },
   { label: "grieving", regex: /\bgrief|grieving|mourning|loss\b/i, tone: "negative", score: 2.4 },
   { label: "ashamed", regex: /\bashamed|embarrassed|humiliated\b/i, tone: "negative", score: 2 },
   { label: "numb", regex: /\bnumb|flat|blank|shut down\b/i, tone: "negative", score: 1.9 },
@@ -472,23 +472,25 @@ function getCentralSentences(sentences: SentenceSignal[]) {
 }
 
 function classifySupportImpact(sentence: SentenceSignal): JournalAnalysis["supports"][number]["impact"] {
-  if (/(energized|energising|energizing|momentum)/i.test(sentence.sentence)) {
+  const text = sentence.sentence;
+
+  if (/(energized|energising|energizing|momentum|excited|stoked)/i.test(text)) {
     return "energizing";
   }
 
-  if (/(seen|supported|validated|understood)/i.test(sentence.sentence)) {
+  if (/(seen|supported|validated|understood|safe|familiar|comforting|care)/i.test(text)) {
     return "validating";
   }
 
-  if (/(grounded|steady|steadier|settled|calmer|breathe|breathing)/i.test(sentence.sentence)) {
+  if (/(grounded|steady|steadier|settled|calmer|breathe|breathing|quiet|still|meaningful|present|soft)/i.test(text)) {
     return "grounding";
   }
 
-  if (/(helped|better|lighter|relieved|eased)/i.test(sentence.sentence)) {
+  if (/(helped|better|lighter|relieved|eased|enjoyable|delicious|proud|felt good|felt a lot better after)/i.test(text)) {
     return "helpful";
   }
 
-  return "mixed";
+  return "helpful";
 }
 
 function scoreEmotionMap(sentences: SentenceSignal[]) {
@@ -818,7 +820,7 @@ function extractSupports(_rawText: string, sentences: SentenceSignal[]) {
   const matches: Array<JournalAnalysis["supports"][number] & { weight: number }> = [];
 
   for (const sentence of sentences) {
-    const candidate = getSupportCandidate(sentence);
+    const candidate = inferSupportCandidateFromSentence(sentence);
 
     if (!candidate) {
       continue;

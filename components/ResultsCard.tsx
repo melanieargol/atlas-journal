@@ -7,6 +7,7 @@ type ResultsCardProps = {
   analysis: JournalAnalysis;
   mode?: "mock" | "openai";
   archiveBasePath?: string;
+  linkTags?: boolean;
 };
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -34,11 +35,17 @@ function SectionTitle({ title, hint }: { title: string; hint: string }) {
 
 function FilterTag({
   label,
-  href
+  href,
+  linkTags
 }: {
   label: string;
   href: string;
+  linkTags: boolean;
 }) {
+  if (!linkTags) {
+    return <span className="tag">{label}</span>;
+  }
+
   return (
     <Link href={href as any} className="tag tag-link">
       {label}
@@ -59,7 +66,7 @@ function formatRestorativeMoment(value: string) {
   return `moment of ${value}`;
 }
 
-export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsCardProps) {
+export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags = true }: ResultsCardProps) {
   const displayMood = analysis.user_mood ?? analysis.mood_score;
   const displayStress = analysis.user_stress ?? analysis.stress_level;
   const displayEnergy = analysis.user_energy ?? analysis.energy_level;
@@ -234,7 +241,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             <div className="tag-row">
               {analysis.recurring_topics.length > 0 ? (
                 analysis.recurring_topics.map((item) => (
-                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} />
+                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
                 ))
               ) : (
                 <span className="muted-text">This entry does not surface a strong concept-level topic beyond the broader themes below.</span>
@@ -251,7 +258,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
             <div className="tag-row">
               {analysis.personal_keywords.length > 0 ? (
                 analysis.personal_keywords.map((item) => (
-                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} />
+                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
                 ))
               ) : (
                 <span className="muted-text">No especially strong personal anchor stood out yet.</span>
@@ -311,7 +318,7 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive" }: ResultsC
               />
               <div className="tag-row">
                 {mergedTags.map((item) => (
-                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} />
+                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
                 ))}
               </div>
             </article>

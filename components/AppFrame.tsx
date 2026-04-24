@@ -41,6 +41,7 @@ export async function AppFrame({ title, description, children, demoMode = false,
         <nav className="nav">
           {demoMode ? (
             <>
+              <Link href="/demo">Sandbox</Link>
               <Link href="/demo/dashboard">Dashboard</Link>
               <Link href="/demo/archive">Archive</Link>
               {user ? <Link href="/dashboard">My account</Link> : <Link href="/auth/sign-in">Sign in</Link>}

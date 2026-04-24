@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { analyzeEntry } from "@/lib/ai";
+import { analyzeJournalEntry } from "@/lib/analysis-service";
 import { getCurrentUser } from "@/lib/auth";
-import { saveEntry } from "@/lib/db";
 import {
   formatValidationError,
-  validateAnalysis,
   validateAnalyzeEntryInput
 } from "@/lib/validators";
 
@@ -35,73 +33,33 @@ export async function POST(request: Request) {
 
     const entryDate = input.entry_date ?? new Date().toISOString().slice(0, 10);
 
-    let analysis: Awaited<ReturnType<typeof analyzeEntry>>["analysis"];
-    let mode: Awaited<ReturnType<typeof analyzeEntry>>["mode"];
-
     try {
-      const result = await analyzeEntry(input.raw_text, {
-        user_mood: input.user_mood ?? null,
-        user_stress: input.user_stress ?? null,
-        user_energy: input.user_energy ?? null
+      const result = await analyzeJournalEntry(input.raw_text, {
+        mode: "authenticated",
+        persist: true,
+        entryDate,
+        checkIns: {
+          user_mood: input.user_mood ?? null,
+          user_stress: input.user_stress ?? null,
+          user_energy: input.user_energy ?? null
+        }
       });
-      analysis = result.analysis;
-      mode = result.mode;
+      return NextResponse.json({
+        ok: true,
+        analysis: result.analysis,
+        mode: result.mode,
+        entryId: result.entryId
+      });
     } catch (error) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Atlas Journal could not generate analysis.",
-          details: error instanceof Error ? error.message : "Unknown analysis error."
+          error: "Atlas Journal could not analyze and save the entry.",
+          details: error instanceof Error ? error.message : formatValidationError(error)
         },
         { status: 500 }
       );
     }
-
-    let validated;
-    try {
-      validated = validateAnalysis({
-        ...analysis,
-        raw_text: input.raw_text,
-        user_mood: input.user_mood ?? null,
-        user_stress: input.user_stress ?? null,
-        user_energy: input.user_energy ?? null
-      });
-    } catch (error) {
-      console.error("validateAnalysis failed:", error);
-      console.error("analysis payload:", analysis);
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Analysis schema validation failed.",
-          details: formatValidationError(error)
-        },
-        { status: 400 }
-      );
-    }
-
-    let savedEntry;
-    try {
-      savedEntry = await saveEntry(validated, entryDate);
-    } catch (error) {
-      console.error("saveEntry failed:", error);
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Analysis succeeded, but the entry could not be saved.",
-          details: error instanceof Error ? error.message : "Unknown save error."
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      analysis: validated,
-      mode,
-      entryId: savedEntry.id
-    });
   } catch (error) {
     return NextResponse.json(
       {

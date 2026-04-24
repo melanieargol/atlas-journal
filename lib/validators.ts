@@ -1,9 +1,19 @@
 import { ZodError } from "zod";
 
-import { analyzeEntryInputSchema, journalAnalysisSchema, journalRecordSchema, updateEntryInputSchema } from "@/lib/schema";
+import {
+  analyzeEntryInputSchema,
+  demoAnalyzeEntryInputSchema,
+  journalAnalysisSchema,
+  journalRecordSchema,
+  updateEntryInputSchema
+} from "@/lib/schema";
 
 export function validateAnalyzeEntryInput(input: unknown) {
   return analyzeEntryInputSchema.parse(input);
+}
+
+export function validateDemoAnalyzeEntryInput(input: unknown) {
+  return demoAnalyzeEntryInputSchema.parse(input);
 }
 
 export function validateUpdateEntryInput(input: unknown) {
