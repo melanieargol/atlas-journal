@@ -187,8 +187,8 @@ export function DemoSandboxSurface({
   }
 
   return (
-    <div className="journal-grid">
-      <section className="panel composer-panel demo-sandbox-panel">
+    <div className="journal-grid demo-sandbox-layout">
+      <section className="panel composer-panel demo-sandbox-panel demo-sandbox-main">
         <div className="section-head">
           <div>
             <p className="section-label">Guest sandbox</p>
@@ -246,7 +246,7 @@ export function DemoSandboxSurface({
           helperText="Optional check-ins help Atlas ground the reflection in your own numbers first. In demo mode they stay in memory only."
         />
 
-        <div className="composer-footer">
+        <div className="composer-footer demo-sandbox-actions">
           <button className="primary-button" type="button" onClick={handleAnalyze} disabled={isAnalyzing}>
             {isAnalyzing ? "Analyzing..." : "Analyze My Entry"}
           </button>
@@ -300,7 +300,7 @@ export function DemoSandboxSurface({
         <p className="muted-text">
           The dashboard and archive still use seeded sample entries, so you can compare the live sandbox with Atlas&apos;s saved-entry views, pattern panels, and archive filters.
         </p>
-        <div className="cta-row">
+        <div className="cta-row demo-sandbox-actions">
           <Link href="/demo/dashboard" className="secondary-button">
             Open sample dashboard
           </Link>
@@ -326,7 +326,7 @@ export function DemoSandboxSurface({
             <div className="success-box demo-sandbox-result-note">
               This demo entry was not saved. Create an account to save entries and track patterns over time.
             </div>
-            <div className="cta-row">
+            <div className="cta-row demo-sandbox-actions">
               <Link href={accountHref as any} className="primary-button">
                 {accountLabel}
               </Link>

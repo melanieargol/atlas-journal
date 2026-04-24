@@ -18,7 +18,7 @@ export async function AppFrame({ title, description, children, demoMode = false,
   const userEmail = user?.email ?? null;
 
   return (
-    <div className="app-shell">
+    <div className={demoMode ? "app-shell app-shell-demo" : "app-shell"}>
       <div className="background-haze haze-left" />
       <div className="background-haze haze-right" />
 
@@ -69,7 +69,7 @@ export async function AppFrame({ title, description, children, demoMode = false,
         </nav>
       </header>
 
-      <main className="page">
+      <main className={demoMode ? "page page-demo" : "page"}>
         <section className="hero">
           <p className="eyebrow">Emotional intelligence lab</p>
           {demoMode ? (
