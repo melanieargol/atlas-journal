@@ -187,9 +187,9 @@ export function DemoSandboxSurface({
   }
 
   return (
-    <div className="journal-grid demo-sandbox-layout">
-      <section className="panel composer-panel demo-sandbox-panel demo-sandbox-main">
-        <div className="section-head">
+    <div className="journal-grid demo-sandbox-layout demo-sandbox-root">
+      <section className="panel composer-panel demo-sandbox-panel demo-sandbox-main demo-sandbox-card">
+        <div className="section-head demo-sandbox-heading">
           <div>
             <p className="section-label">Guest sandbox</p>
             <h2>Try the real Atlas reflection flow without creating an account.</h2>
@@ -200,16 +200,16 @@ export function DemoSandboxSurface({
           </div>
         </div>
 
-        <div className="demo-sandbox-message">
+        <div className="demo-sandbox-message demo-sandbox-privacy">
           <p className="demo-sandbox-message-title">Temporary sandbox</p>
           <p className="muted-text">
             This is a temporary sandbox. Demo entries are analyzed only to generate this reflection and are not saved.
           </p>
         </div>
 
-        <div className="demo-sandbox-starters">
+        <div className="demo-sandbox-starters demo-sandbox-starter-block">
           <p className="section-label">Need a quick starting point?</p>
-          <div className="tag-row">
+          <div className="tag-row demo-sandbox-starter-row">
             {starterIdeas.map((item) => (
               <button
                 key={item.label}
@@ -230,23 +230,25 @@ export function DemoSandboxSurface({
         <textarea
           ref={textareaRef}
           id="demo-journal-entry"
-          className="entry-input"
+          className="entry-input demo-entry-textarea"
           value={rawText}
           onChange={(event) => setRawText(event.target.value)}
           placeholder="Write freely. Atlas will analyze this entry in real time, but nothing here will be saved."
         />
-        <div className="demo-sandbox-meta">
+        <div className="demo-sandbox-meta demo-sandbox-meta-row">
           <p className={remainingCharacters < 0 ? "muted-text demo-sandbox-meta-warning" : "muted-text"}>{entryStatusText}</p>
           <p className="muted-text field-help">Refresh the page and this sandbox resets completely.</p>
         </div>
 
-        <CheckInFields
-          values={checkIns}
-          onChange={handleCheckInChange}
-          helperText="Optional check-ins help Atlas ground the reflection in your own numbers first. In demo mode they stay in memory only."
-        />
+        <div className="demo-sandbox-checkins">
+          <CheckInFields
+            values={checkIns}
+            onChange={handleCheckInChange}
+            helperText="Optional check-ins help Atlas ground the reflection in your own numbers first. In demo mode they stay in memory only."
+          />
+        </div>
 
-        <div className="composer-footer demo-sandbox-actions">
+        <div className="composer-footer demo-sandbox-actions demo-sandbox-form-actions">
           <button className="primary-button" type="button" onClick={handleAnalyze} disabled={isAnalyzing}>
             {isAnalyzing ? "Analyzing..." : "Analyze My Entry"}
           </button>

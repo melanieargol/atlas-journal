@@ -393,6 +393,7 @@ select {
   align-items: start;
 }
 
+.demo-sandbox-root,
 .demo-sandbox-layout > *,
 .demo-sandbox-main,
 .demo-sandbox-sidecar,
@@ -402,6 +403,26 @@ select {
   max-width: 100%;
   min-width: 0;
   grid-column: 1 / -1;
+}
+
+.demo-sandbox-main,
+.demo-sandbox-card,
+.demo-sandbox-privacy,
+.demo-sandbox-starter-block,
+.demo-sandbox-starter-row,
+.demo-entry-textarea,
+.demo-sandbox-meta-row,
+.demo-sandbox-checkins,
+.demo-sandbox-form-actions {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.demo-sandbox-main,
+.demo-sandbox-card {
+  justify-self: stretch;
+  align-self: stretch;
 }
 
 .page,
@@ -2005,6 +2026,34 @@ select {
 }
 
 @media (max-width: 720px) {
+  .demo-sandbox-root,
+  .demo-sandbox-layout,
+  .demo-sandbox-main,
+  .demo-sandbox-card,
+  .demo-sandbox-privacy,
+  .demo-sandbox-starter-block,
+  .demo-sandbox-starter-row,
+  .demo-entry-textarea,
+  .demo-sandbox-meta-row,
+  .demo-sandbox-checkins,
+  .demo-sandbox-checkins .checkin-section,
+  .demo-sandbox-form-actions {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+    align-self: stretch;
+    grid-column: 1 / -1;
+  }
+
+  .demo-sandbox-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .demo-sandbox-heading {
+    width: 100%;
+  }
+
   .topbar {
     min-height: auto;
     padding-inline: 16px;
@@ -2087,6 +2136,10 @@ select {
   .cta-row > *,
   .demo-sandbox-actions > * {
     width: 100%;
+    max-width: 100%;
+  }
+
+  .demo-sandbox-starter-row > * {
     max-width: 100%;
   }
 
