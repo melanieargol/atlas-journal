@@ -711,6 +711,9 @@ function sanitizePersonalKeywordFinal(value: string, safetyLevel: JournalAnalysi
   return compact;
 }
 
+// Local coping candidates keep transient evidence while the heuristic pipeline is still scoring
+// and linking proof. The persisted JournalAnalysis schema intentionally stores only action + impact,
+// so downstream proof has to live in evidence_spans rather than coping_actions themselves.
 function getCopingEvidenceText(item: JournalAnalysis["coping_actions"][number]) {
   const internal = item as JournalAnalysis["coping_actions"][number] & { evidence?: string };
   return internal.evidence ?? item.action;
@@ -768,6 +771,86 @@ function normalizeCopingImpact(
   }
 
   return "unclear";
+}
+
+function normalizeSupportImpact(
+  value: string | undefined | null
+): JournalAnalysis["supports"][number]["impact"] {
+  const normalized = (value ?? "").toLowerCase().trim();
+
+  if (["grounding", "grounded", "calming", "stabilizing", "steadying"].includes(normalized)) {
+    return "grounding";
+  }
+
+  if (["energizing", "energised", "motivating"].includes(normalized)) {
+    return "energizing";
+  }
+
+  if (["validating", "validated", "seen", "understood", "supportive connection"].includes(normalized)) {
+    return "validating";
+  }
+
+  if (["helpful", "supportive", "soothing", "comforting", "relieving"].includes(normalized)) {
+    return "helpful";
+  }
+
+  return "mixed";
+}
+
+function normalizeEvidenceType(
+  value: string | undefined | null
+): JournalAnalysis["evidence_spans"][number]["type"] {
+  const normalized = (value ?? "").toLowerCase().trim();
+
+  if (normalized === "emotion") return "emotion";
+  if (normalized === "stressor") return "stressor";
+  if (normalized === "support" || normalized === "coping" || normalized === "restorative") return "support";
+  if (normalized === "topic" || normalized === "theme") return "topic";
+  return "safety";
+}
+
+function normalizeShiftDirectionValue(
+  value: string | undefined | null
+): JournalAnalysis["emotional_shift"]["direction"] {
+  const normalized = (value ?? "").toLowerCase().trim();
+
+  if (["improved", "worsened", "unchanged", "mixed"].includes(normalized)) {
+    return normalized as JournalAnalysis["emotional_shift"]["direction"];
+  }
+
+  if (["softened", "settled", "clarified", "recovering", "recovered after disruption", "became more grounded", "became more honest"].includes(normalized)) {
+    return "improved";
+  }
+
+  if (["intensified", "destabilized", "became more burdened", "became more activated"].includes(normalized)) {
+    return "worsened";
+  }
+
+  if (["interrupted", "redirected", "remained mixed", "remained unresolved", "unresolved", "stayed reactive"].includes(normalized)) {
+    return "mixed";
+  }
+
+  return "unchanged";
+}
+
+function normalizeEnergyDirectionValue(
+  value: string | undefined | null
+): JournalAnalysis["energy_direction"] {
+  const normalized = (value ?? "").toLowerCase().trim();
+
+  if (["draining", "restorative", "mixed", "neutral"].includes(normalized)) {
+    return normalized as JournalAnalysis["energy_direction"];
+  }
+
+  if (["drained", "depleting"].includes(normalized)) {
+    return "draining";
+  }
+
+  if (["restoring", "energizing", "energised"].includes(normalized)) {
+    return "restorative";
+  }
+
+  return "neutral";
 }
 
 function inferSupportCandidateFromSentence(sentence: SentenceSignal): JournalAnalysis["supports"][number] | null {
@@ -2366,6 +2449,10 @@ function getRankedEmotions(scores: Map<string, number>) {
   return Array.from(scores.entries()).sort((a, b) => b[1] - a[1]);
 }
 
+// Legacy pre-extractEvents heuristics are intentionally kept for reference while the newer
+// staged pipeline is active. buildHeuristicAnalysis() now uses extractEvents(),
+// detectSupportsAndCoping(), detectStressors(), buildEmotionalTimeline(), and
+// synthesizeInterpretation() instead of the helpers below.
 function derivePrimaryEmotion(
   scores: Map<string, number>,
   toneScore: number,
@@ -3920,6 +4007,9 @@ function synthesizeInterpretation(
         .slice(0, 2)
         .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
         .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "support" as const, label: normalizePromotedConcept(item.label, item.evidence, "support") })),
+      // The persisted evidence schema only supports emotion/stressor/support/topic/safety.
+      // Coping and restorative proof therefore rides through as support evidence rather than
+      // creating a parallel enum contract that db.ts / UI do not understand yet.
       ...copingActions
         .slice(0, 2)
         .map((item) => JSON.stringify({ text: quoteSupportingEvidence(getCopingEvidenceText(item)), type: "support" as const, label: item.action })),
@@ -4094,6 +4184,61 @@ function applyCheckInGuardrailsToAnalysis(analysis: JournalAnalysis, userCheckIn
   return validateAnalysis(next);
 }
 
+function normalizeModelAnalysisShape(input: unknown): unknown {
+  if (!input || typeof input !== "object") {
+    return input;
+  }
+
+  const analysis = input as Record<string, unknown>;
+
+  return {
+    ...analysis,
+    coping_actions: Array.isArray(analysis.coping_actions)
+      ? analysis.coping_actions.map((item) =>
+          item && typeof item === "object"
+            ? {
+                ...(item as Record<string, unknown>),
+                impact: normalizeCopingImpact((item as Record<string, unknown>).impact as string | undefined | null)
+              }
+            : item
+        )
+      : analysis.coping_actions,
+    supports: Array.isArray(analysis.supports)
+      ? analysis.supports.map((item) =>
+          item && typeof item === "object"
+            ? {
+                ...(item as Record<string, unknown>),
+                impact: normalizeSupportImpact((item as Record<string, unknown>).impact as string | undefined | null)
+              }
+            : item
+        )
+      : analysis.supports,
+    evidence_spans: Array.isArray(analysis.evidence_spans)
+      ? analysis.evidence_spans.map((item) =>
+          item && typeof item === "object"
+            ? {
+                ...(item as Record<string, unknown>),
+                type: normalizeEvidenceType((item as Record<string, unknown>).type as string | undefined | null)
+              }
+            : item
+        )
+      : analysis.evidence_spans,
+    energy_direction: normalizeEnergyDirectionValue(analysis.energy_direction as string | undefined | null),
+    emotional_shift:
+      analysis.emotional_shift && typeof analysis.emotional_shift === "object"
+        ? {
+            ...(analysis.emotional_shift as Record<string, unknown>),
+            direction: normalizeShiftDirectionValue(
+              (analysis.emotional_shift as Record<string, unknown>).direction as string | undefined | null
+            )
+          }
+        : analysis.emotional_shift
+  };
+}
+
+// Active staged heuristic path:
+// raw entry -> extractEvents / extractStateSignals -> support & stressor promotion ->
+// emotional timeline synthesis -> safety suppression -> output sanitization -> validation.
 function buildHeuristicAnalysis(rawText: string, userCheckIns?: UserCheckIns): JournalAnalysis {
   const eventsResult = extractEvents(rawText);
   const stateResult = extractStateSignals(rawText);
@@ -4193,10 +4338,11 @@ async function callOpenAI(rawText: string, userCheckIns?: UserCheckIns): Promise
   const payload = await response.json();
   const content = payload.choices?.[0]?.message?.content;
   const parsed = typeof content === "string" ? JSON.parse(content) : content;
+  const normalizedParsed = normalizeModelAnalysisShape(parsed);
 
   return {
     analysis: applyCheckInGuardrailsToAnalysis(
-      applySafetySensitiveSuppressionToAnalysis(sanitizeAnalysisOutput(validateAnalysis(parsed))),
+      applySafetySensitiveSuppressionToAnalysis(sanitizeAnalysisOutput(validateAnalysis(normalizedParsed))),
       userCheckIns
     ),
     mode: "openai"

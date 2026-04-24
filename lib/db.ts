@@ -105,6 +105,9 @@ function normalizeAnalysis(input: unknown): JournalAnalysis | null {
     return null;
   }
 
+  // This layer is intentionally validation-only. It trims invalid values and preserves analyzer
+  // emptiness, but it should not reconstruct supports, coping, restorative signals, evidence, or
+  // keywords from sibling fields when ai.ts intentionally left them empty.
   const analysis = input as Record<string, unknown>;
   const triggers = collectValidItems(analysis.triggers, triggerSchema);
   const copingActions = collectValidItems(analysis.coping_actions, copingActionSchema);
@@ -155,10 +158,7 @@ function normalizeAnalysis(input: unknown): JournalAnalysis | null {
     themes: sanitizeStringArray(analysis.themes),
     recurring_topics: recurringTopics,
     personal_keywords: personalKeywords,
-    notable_entities:
-      notableEntities.length > 0
-        ? notableEntities
-        : Array.from(new Set([...stressors.map((item) => item.label), ...supports.map((item) => item.label)])).slice(0, 8),
+    notable_entities: notableEntities,
     restorative_signals: restorativeSignals,
     evidence_spans: evidenceSpans,
     notable_phrases: sanitizeStringArray(analysis.notable_phrases),
