@@ -605,14 +605,19 @@ function hasConcernContext(text: string) {
   );
 }
 
+function hasExplicitIllnessLanguage(text: string) {
+  return /\b(sick|ill|illness|fever|migraine|headache|pain|nausea|infection|doctor|medicine|medication|hospital|cold|flu|injury|diagnosis|symptoms|unwell|not well|cough)\b/i.test(
+    text
+  );
+}
+
 function hasFamilyIllnessConcern(text: string) {
   return (
     /\b(daughter|son|child|kid|kids|baby|toddler|mom|dad|mother|father|parent|parents|family|sister|brother|wife|husband|partner|flora)\b/i.test(
       text
     ) &&
-    /\b(sick|ill|unwell|not well|fever|flu|infection|cough|pain|migraine|hurting|better by morning|get better|be better|heals? her|heals? him|heals? them|heals? Flora)\b/i.test(
-      text
-    )
+    (hasExplicitIllnessLanguage(text) ||
+      /\b(better by morning|get better|be better|heals? her|heals? him|heals? them|heals? Flora)\b/i.test(text))
   );
 }
 
@@ -1319,7 +1324,7 @@ function deriveEntryTopics(
     /plan(?:ned)?|schedule(?:d)?.*(fun|movie|date|outing|trip)/i.test(entry) ? "social connection" : null,
     /nap|napped|rested|rest/i.test(entry) ? "recovery" : null,
     hasFamilyIllnessConcern(entry) ? "family health" : null,
-    /sick|ill|unwell|fever|flu|heal|better by morning|recover/i.test(entry) ? "illness" : null,
+    hasExplicitIllnessLanguage(entry) ? "illness" : null,
     /honest|truth|clearer|clarity/i.test(entry) ? "emotional honesty" : null,
     /in between|in-between|between versions|transition|becoming/i.test(entry) ? "transition" : null,
     /watchful|concerned|looking into|trying to find out|detective|waiting for information/i.test(entry) ? "watchfulness" : null,
@@ -1564,7 +1569,7 @@ function normalizePromotedConcept(label: string, evidence: string, bucket: "stre
       return "self-regulation";
     }
     if (/(friends|family|hung out|spent time with|great time|good time)/i.test(evidence)) return "social connection";
-    if (/(sick|ill|unwell|better by morning|heal|recover)/i.test(evidence)) return "illness";
+    if (hasExplicitIllnessLanguage(evidence)) return "illness";
     if (/(hostile|fight|argued|threat|punched|slapped|kicked|assault|revenge|worth it)/i.test(evidence)) return "conflict";
     if (/(grief|grieving|mourning|loss)/i.test(evidence)) return "grief";
     if (/(transition|between versions|in between|in-between)/i.test(evidence)) return "transition";
@@ -2109,6 +2114,18 @@ function normalizeConceptLabel(label: string) {
   if (/(pain|migraine|sleep deprivation|rough night of sleep)/i.test(label)) return "physical strain";
 
   return normalized;
+}
+
+function isRegulatedStateLabel(label: string) {
+  return /^(present|steady|grounded|accepting|relieved|calm|calmer|clarifying|mixed recovery|settling|supported|hopeful|okay|ok)$/i.test(
+    label.trim()
+  );
+}
+
+function isClearlyNegativeStateLabel(label: string) {
+  return /^(overwhelmed|anxious|fearful|alarmed|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair|burdened|reactive|lonely)$/i.test(
+    label.trim()
+  );
 }
 
 function shouldPromoteTopic(label: string) {
@@ -3703,8 +3720,16 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
   const sustainedReactivity = startSnapshot.reactive >= 1.6 && middleSnapshot.reactive >= 1.8 && endSnapshot.reactive >= 1.5;
   const sustainedWatchfulness = startSnapshot.watchful >= 1.4 && middleSnapshot.watchful >= 1.4 && endSnapshot.watchful >= 1.2;
   const explicitHarmPresent = stressors.some((item) => item.label === "physical aggression" || item.category === "harm" || item.label === "threatening situation");
+  const regulatedStart = isRegulatedStateLabel(before) || isRegulatedStateLabel(start);
+  const regulatedEnd = isRegulatedStateLabel(after) || isRegulatedStateLabel(end);
+  const clearlyNegativeStart = isClearlyNegativeStateLabel(before) || isClearlyNegativeStateLabel(start);
+  const clearlyNegativeEnd = isClearlyNegativeStateLabel(after) || isClearlyNegativeStateLabel(end);
   const preliminaryDirection: JournalAnalysis["emotional_shift"]["direction"] =
-    Math.abs(scoreDelta) < 0.2 && after === before
+    regulatedStart && regulatedEnd
+      ? reactiveMiddle || sustainedWatchfulness || middle !== start
+        ? "mixed"
+        : "unchanged"
+    : Math.abs(scoreDelta) < 0.2 && after === before
       ? "unchanged"
       : sustainedReactivity || (explicitHarmPresent && end === reaction)
         ? "unchanged"
@@ -3714,18 +3739,17 @@ function buildEmotionalTimeline(_entry: string, stateResult: ReturnType<typeof e
         ? "mixed"
       : scoreDelta > 0.45 && after !== before
         ? "improved"
-      : scoreDelta < -0.45 && after !== before
+      : scoreDelta < -0.45 && after !== before && clearlyNegativeEnd && !regulatedEnd
         ? "worsened"
       : end === start
       ? middle !== start
         ? "mixed"
         : "unchanged"
       : groundingEnd &&
-          !/(present|steady|accepting|relieved|hopeful|clarifying|unsettled but grounded|mixed recovery|grounded)/i.test(start) &&
+          !regulatedStart &&
           endSnapshot.reactive < startSnapshot.reactive + 0.2
         ? "improved"
-      : /(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair|burdened|reactive)/i.test(end) &&
-            !/(overwhelmed|anxious|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair|burdened|reactive)/i.test(start)
+      : clearlyNegativeEnd && !clearlyNegativeStart && !regulatedEnd
           ? "worsened"
           : "mixed";
 
