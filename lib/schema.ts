@@ -57,7 +57,7 @@ export const supportSchema = z.object({
 
 export const evidenceSpanSchema = z.object({
   text: z.string().min(1),
-  type: z.enum(["emotion", "stressor", "support", "topic", "safety"]),
+  type: z.enum(["emotion", "stressor", "support", "coping", "restorative", "topic", "keyword", "safety"]),
   label: z.string().min(1)
 });
 

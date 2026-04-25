@@ -639,6 +639,18 @@ function hasProductiveProgress(text: string) {
   );
 }
 
+function hasExplicitCreativeProjectLanguage(text: string) {
+  return (
+    /\b(creative|creativity|art|artist|poem|writing|write|wrote|drawing|draw|painting|paint|studio|filming|film|design|draft|portfolio|competition|handshake|gateway|atlas journal|studio moonfall)\b/i.test(
+      text
+    ) ||
+    /\bapp\b/i.test(text) ||
+    (/\b(song|music)\b/i.test(text) && /\b(idea|draft|write|wrote|working on|worked on|creative|progress|momentum|making|building|project|created|create|new)\b/i.test(text)) ||
+    (/\b(work(?:ed|ing)? on|building|build|made progress|progress|momentum)\b/i.test(text) &&
+      /\b(song|idea|draft|project|portfolio|app|design|art|music|studio|poem|writing)\b/i.test(text))
+  );
+}
+
 function classifySegmentRoles(segment: SentenceSignal) {
   const roles = new Set<SegmentRole>();
   const text = segment.sentence;
@@ -831,7 +843,10 @@ function normalizeEvidenceType(
 
   if (normalized === "emotion") return "emotion";
   if (normalized === "stressor") return "stressor";
-  if (normalized === "support" || normalized === "coping" || normalized === "restorative") return "support";
+  if (normalized === "support") return "support";
+  if (normalized === "coping") return "coping";
+  if (normalized === "restorative") return "restorative";
+  if (normalized === "keyword") return "keyword";
   if (normalized === "topic" || normalized === "theme") return "topic";
   return "safety";
 }
@@ -1320,7 +1335,7 @@ function deriveEntryTopics(
     copingActions.some((item) => /(care|nourishing|heal|better|care for someone)/i.test(item.action) || hasCaregivingAction(getCopingEvidenceText(item))) ? "caregiving" : null,
     /finals?|semester|exam|straight a|straight as|grades?/i.test(entry) ? "academic achievement" : null,
     hasProductiveProgress(entry) ? "productivity" : null,
-    /app|portfolio|project|competition|handshake|atlas journal|studio moonfall|gateway/i.test(entry) ? "creative momentum" : null,
+    hasExplicitCreativeProjectLanguage(entry) ? "creative momentum" : null,
     /plan(?:ned)?|schedule(?:d)?.*(fun|movie|date|outing|trip)/i.test(entry) ? "social connection" : null,
     /nap|napped|rested|rest/i.test(entry) ? "recovery" : null,
     hasFamilyIllnessConcern(entry) ? "family health" : null,
@@ -1331,7 +1346,7 @@ function deriveEntryTopics(
     /door was open|door was unlocked|door was unlatched|front door/i.test(entry) ? "home safety" : null,
     /punched|slapped|kicked|assault|hostile|fight|revenge|worth it/i.test(entry) ? "conflict" : null,
     signals.some((signal) => signal.label === "grieving") ? "grief" : null,
-    /^(proud|accomplished|excited|motivated)$/.test(primaryEmotion) ? "creative momentum" : null
+    hasExplicitCreativeProjectLanguage(entry) && /^(proud|accomplished|excited|motivated)$/.test(primaryEmotion) ? "creative momentum" : null
   ])
     .map((item) => sanitizeBucketOutputLabel(item, "topic"))
     .filter(Boolean)
@@ -1382,7 +1397,7 @@ function normalizeSupportLabel(label: string, evidence: string, category: string
     return "academic achievement";
   }
 
-  if (/\b(app|portfolio|project|build(?:ing)?|competition|handshake|atlas journal|studio moonfall|gateway)\b/i.test(evidence)) {
+  if (hasExplicitCreativeProjectLanguage(evidence)) {
     return "creative progress";
   }
 
@@ -1437,9 +1452,12 @@ function normalizeSupportLabel(label: string, evidence: string, category: string
 
   if (category === "connection") return "social connection";
   if (category === "movement" && /\bwalk|outside|fresh air\b/i.test(evidence)) return "walking outside";
-  if (category === "accomplishment") return /\b(finals?|semester|exam|class|grades?|straight a|straight as|aced)\b/i.test(evidence)
-    ? "academic achievement"
-    : "creative progress";
+  if (category === "accomplishment") {
+    if (/\b(finals?|semester|exam|class|grades?|straight a|straight as|aced)\b/i.test(evidence)) return "academic achievement";
+    if (hasExplicitCreativeProjectLanguage(evidence)) return "creative progress";
+    if (hasProductiveProgress(evidence)) return "productive progress";
+    return "";
+  }
 
   return sanitizeBucketOutputLabel(normalizePromotedConcept(label, evidence, "support"), "support");
 }
@@ -1523,7 +1541,7 @@ function normalizePromotedConcept(label: string, evidence: string, bucket: "stre
       return bucket === "topic" ? "productivity" : "productive progress";
     }
 
-    if (/\b(app|portfolio|project|build(?:ing)?|competition|handshake|atlas journal|studio moonfall|gateway)\b/i.test(normalizedEvidence)) {
+    if (hasExplicitCreativeProjectLanguage(normalizedEvidence)) {
       return bucket === "topic" ? "creative momentum" : "creative progress";
     }
 
@@ -1729,10 +1747,10 @@ function describeCopingAction(label: string, evidence: string, category: string)
 
 function describeRestorativeMoment(value: string, evidence: string) {
   if (hasHealingHope(evidence) || /hopeful|hope/i.test(value)) return "moment of hope";
-  if (/clarity|clearer|truth|honest/i.test(evidence) || /clarity|clearer|truth|honest/i.test(value)) return "moment of clarity";
-  if (/more present|noticed|aware|awareness|saw it clearly/i.test(evidence) || /presence|awareness/i.test(value)) return "moment of awareness";
-  if (/quiet|slowed down|didn't rush|did not rush/i.test(evidence) || /quiet/i.test(value)) return "moment of quiet";
-  if (/steady|steadier|grounded|settled|calm|calmer|enough/i.test(evidence) || /ground|steady/i.test(value)) return "moment of grounding";
+  if (/clarity|clearer|truth|honest|understood what i needed|came back to myself/i.test(evidence) || /clarity|clearer|truth|honest/i.test(value)) return "moment of clarity";
+  if ((/more present|aware|awareness|quiet enough to notice|noticed/i.test(evidence) && hasExplicitRestorativeShift(evidence)) || /presence|awareness/i.test(value)) return "moment of awareness";
+  if (/\b(quiet|still)\b/i.test(evidence) && /(slowed down|didn't rush|did not rush|present|grounded|settled|calm|calmer|noticed)/i.test(evidence)) return "moment of quiet";
+  if (/steady|steadier|grounded|settled|calm|calmer|enough|restored|came back to myself/i.test(evidence) || /ground|steady/i.test(value)) return "moment of grounding";
   if (/lighter|relieved|eased|release/i.test(evidence) || /release/i.test(value)) return "moment of release";
   return "";
 }
@@ -1746,6 +1764,100 @@ function isNotablePhraseCandidate(sentence: string) {
     ) ||
       /["']/i.test(sentence))
   );
+}
+
+function normalizeLooseComparisonText(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function phrasesSubstantiallyOverlap(a: string, b: string) {
+  const normalizedA = normalizeLooseComparisonText(a);
+  const normalizedB = normalizeLooseComparisonText(b);
+
+  if (!normalizedA || !normalizedB) return false;
+  if (normalizedA === normalizedB) return true;
+
+  const [shorter, longer] =
+    normalizedA.length <= normalizedB.length ? [normalizedA, normalizedB] : [normalizedB, normalizedA];
+
+  if (shorter.length >= 18 && longer.includes(shorter)) return true;
+
+  const shorterWords = shorter.split(" ").filter(Boolean);
+  const longerWords = new Set(longer.split(" ").filter(Boolean));
+  const overlapCount = shorterWords.filter((word) => longerWords.has(word)).length;
+
+  return shorterWords.length >= 5 && overlapCount / shorterWords.length >= 0.8;
+}
+
+function semanticLabelOverlap(a: string, b: string) {
+  const normalizedA = normalizeConceptLabel(a);
+  const normalizedB = normalizeConceptLabel(b);
+
+  if (!normalizedA || !normalizedB) return false;
+  if (normalizedA === normalizedB) return true;
+  if (normalizedA.length >= 6 && normalizedB.length >= 6 && (normalizedA.startsWith(normalizedB) || normalizedB.startsWith(normalizedA))) {
+    return true;
+  }
+
+  return phrasesSubstantiallyOverlap(a, b);
+}
+
+function selectDistinctNotablePhrases(candidates: Array<{ sentence: string; score: number }>) {
+  const kept: Array<{ sentence: string; score: number }> = [];
+
+  for (const candidate of [...candidates].sort((a, b) => b.score - a.score || b.sentence.length - a.sentence.length)) {
+    if (!candidate.sentence) continue;
+    if (kept.some((item) => phrasesSubstantiallyOverlap(item.sentence, candidate.sentence))) continue;
+    kept.push(candidate);
+    if (kept.length >= 2) break;
+  }
+
+  return kept.map((item) => item.sentence);
+}
+
+function isMeaningfulCustomEmotionPhrase(term: string) {
+  const normalized = normalizeLooseComparisonText(term);
+  if (!normalized || normalized.split(/\s+/).length < 3) return false;
+  if (!/(felt|more than|waiting to understand|came back to myself|quiet enough to notice|clearer|honest|enough|grounded|settled|calm|relief|still)/i.test(term)) {
+    return false;
+  }
+
+  return !looksLikeJunkOutputLabel(term, "emotion");
+}
+
+function selectDistinctCustomEmotionTerms(
+  candidates: string[],
+  context: {
+    primaryEmotion: string;
+    secondaryEmotions: string[];
+    topics: string[];
+    themes: string[];
+    notablePhrases: string[];
+  }
+) {
+  const blockedComparisons = [
+    context.primaryEmotion,
+    ...context.secondaryEmotions,
+    ...context.topics,
+    ...context.themes,
+    ...context.notablePhrases
+  ].filter(Boolean);
+
+  const kept: string[] = [];
+
+  for (const candidate of candidates) {
+    if (!isMeaningfulCustomEmotionPhrase(candidate)) continue;
+    if (blockedComparisons.some((item) => semanticLabelOverlap(item, candidate))) continue;
+    if (kept.some((item) => semanticLabelOverlap(item, candidate))) continue;
+    kept.push(candidate);
+    if (kept.length >= 4) break;
+  }
+
+  return kept;
 }
 
 
@@ -1842,6 +1954,12 @@ function scoreSubtleCopingAction(action: string, evidence: string, impact: strin
 
 function hasInternalShiftLanguage(text: string) {
   return /(felt more present|steadier|calmer|lighter|relieved|clearer|settled|softened|enough|let it be|grounded|more aware)/i.test(text) || hasHealingHope(text);
+}
+
+function hasExplicitRestorativeShift(text: string) {
+  return /(felt more present|felt a little more grounded|felt grounded|grounded again|felt calm|felt calmer|felt steadier|felt settled|felt relief|felt relieved|felt restored|came back to myself|clearer|understood what i needed|quiet enough to notice|settle|settled|restored|relief|relieved|softened)/i.test(
+    text
+  );
 }
 
 function scoreNotablePhrase(sentence: string) {
@@ -2036,11 +2154,22 @@ function sanitizeAnalysisOutput(analysis: JournalAnalysis): JournalAnalysis {
 
   const recurringTopics = unique(analysis.recurring_topics.map((item) => sanitizeBucketOutputLabel(item, "topic")).filter(Boolean)).slice(0, 4);
   const themes = unique(analysis.themes.map((item) => sanitizeBucketOutputLabel(item, "theme")).filter(Boolean)).slice(0, 5);
+  const notablePhrases = selectDistinctNotablePhrases(
+    analysis.notable_phrases
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((sentence) => ({ sentence, score: scoreNotablePhrase(sentence) }))
+  );
   const personalKeywords = unique(analysis.personal_keywords.map((item) => sanitizePersonalKeywordFinal(item, safetyLevel)).filter(Boolean))
     .filter((item) => isEligiblePersonalKeyword(item, item))
     .slice(0, 5);
   const primaryEmotion = sanitizeBucketOutputLabel(analysis.primary_emotion, "emotion") || analysis.primary_emotion;
-  const secondaryEmotions = unique(analysis.secondary_emotions.map((item) => sanitizeBucketOutputLabel(item, "emotion")).filter(Boolean)).slice(0, 4);
+  const secondaryEmotions = unique(
+    analysis.secondary_emotions
+      .map((item) => sanitizeBucketOutputLabel(item, "emotion"))
+      .filter(Boolean)
+      .filter((item) => shouldKeepSecondaryEmotionLabel(item, analysis))
+  ).slice(0, 4);
 
   const promotedLabels = new Set(
     [
@@ -2052,16 +2181,30 @@ function sanitizeAnalysisOutput(analysis: JournalAnalysis): JournalAnalysis {
       ...copingActions.map((item) => item.action),
       ...restorativeSignals,
       ...stressors.map((item) => item.label),
-      ...recurringTopics
+      ...recurringTopics,
+      ...themes,
+      ...personalKeywords
     ]
       .map((item) => normalizeConceptLabel(item))
       .filter(Boolean)
   );
 
-  const evidenceSpans = analysis.evidence_spans
+  const evidenceSpans = dedupeEvidenceSpans(
+    analysis.evidence_spans
     .filter((item) => item.type === "safety" || promotedLabels.has(normalizeConceptLabel(item.label)))
-    .filter((item) => !looksLikeJunkOutputLabel(item.label, item.type === "emotion" ? "emotion" : item.type === "stressor" ? "stressor" : "support"))
-    .slice(0, 8);
+    .filter((item) => !looksLikeJunkOutputLabel(item.label, evidenceTypeToBucket(item.type)))
+  ).slice(0, 8);
+
+  const customEmotionTerms = selectDistinctCustomEmotionTerms(
+    unique(analysis.custom_emotion_terms.map((item) => item.trim()).filter(Boolean)),
+    {
+      primaryEmotion,
+      secondaryEmotions,
+      topics: recurringTopics,
+      themes,
+      notablePhrases
+    }
+  );
 
   return validateAnalysis({
     ...analysis,
@@ -2087,6 +2230,8 @@ function sanitizeAnalysisOutput(analysis: JournalAnalysis): JournalAnalysis {
     recurring_topics: recurringTopics,
     themes,
     personal_keywords: personalKeywords,
+    notable_phrases: notablePhrases,
+    custom_emotion_terms: customEmotionTerms,
     evidence_spans: evidenceSpans,
     reflection_tags: unique(analysis.reflection_tags.map((item) => sanitizeBucketOutputLabel(item, "theme")).filter(Boolean)).slice(0, 6)
   });
@@ -2104,7 +2249,7 @@ function normalizeConceptLabel(label: string) {
   if (/(walk with the dog|movement|run|walk|stretch|gym|hike)/i.test(label)) return "movement";
   if (/(social connection|talked to|talked with|called|texted|spent time with|coffee with|dinner with)/i.test(label)) return "social connection";
   if (/(academic achievement|finals|straight a|straight as|grades?|exam|semester)/i.test(label)) return "academic achievement";
-  if (/(creative progress|creative momentum|portfolio|app|project|competition|handshake|atlas journal|studio moonfall|gateway)/i.test(label)) return "creative momentum";
+  if (/(creative progress|creative momentum)/i.test(label) || hasExplicitCreativeProjectLanguage(label)) return "creative momentum";
   if (/(rest opportunity|nap|napped|rested)/i.test(label)) return "recovery";
   if (/(fun plan|planned fun|scheduled fun)/i.test(label)) return "social connection";
   if (/(proud|accomplished)/i.test(label)) return "accomplishment";
@@ -2126,6 +2271,77 @@ function isClearlyNegativeStateLabel(label: string) {
   return /^(overwhelmed|anxious|fearful|alarmed|tense|angry|rageful|hostile|resentful|spiteful|frustrated|drained|sad|numb|grieving|ashamed|strained|acute despair|burdened|reactive|lonely)$/i.test(
     label.trim()
   );
+}
+
+function hasExplicitEmotionSupport(label: string, text: string) {
+  const normalized = normalizeConceptLabel(label);
+
+  if (normalized === "unsettled") return /\b(unsettled|uneasy|felt off|something felt off)\b/i.test(text);
+  if (normalized === "tense") return /\b(tense|tight|stressed|pressure)\b/i.test(text);
+  if (normalized === "anxious") return /\b(anxious|nervous|panicky|on edge|wired)\b/i.test(text);
+  if (normalized === "burdened") return /\b(burden|heavy|carrying|carry|too much|looming|gnawing|haunting)\b/i.test(text);
+  if (normalized === "overwhelmed") return /\b(overwhelmed|flooded|too much)\b/i.test(text);
+  if (normalized === "sad") return /\b(sad|down|heartbroken|felt sad)\b/i.test(text);
+  if (normalized === "drained") return /\b(drained|exhausted|spent|wiped)\b/i.test(text);
+  if (normalized === "fearful") return /\b(afraid|fearful|scared|terrified)\b/i.test(text);
+  if (normalized === "alarmed") return /\b(alarmed|startled|jolted|spooked)\b/i.test(text);
+  if (normalized === "angry") return /\b(angry|furious|rage|resentful)\b/i.test(text);
+  if (normalized === "hostile") return /\b(hostile|hateful|vengeful|violent)\b/i.test(text);
+  if (normalized === "reactive") return /\b(reactive|reacted|reaction)\b/i.test(text) || hasHostileOrViolentContext(text);
+
+  return true;
+}
+
+function evidenceTypeToBucket(
+  type: JournalAnalysis["evidence_spans"][number]["type"]
+): "emotion" | "stressor" | "support" | "coping" | "restorative" | "topic" | "keyword" {
+  if (type === "emotion") return "emotion";
+  if (type === "stressor") return "stressor";
+  if (type === "coping") return "coping";
+  if (type === "restorative") return "restorative";
+  if (type === "keyword") return "keyword";
+  if (type === "topic") return "topic";
+  return "support";
+}
+
+function shouldKeepSecondaryEmotionLabel(label: string, analysis: JournalAnalysis) {
+  const normalized = normalizeConceptLabel(label);
+  const regulatedStart = isRegulatedStateLabel(analysis.emotional_shift.start_state);
+  const regulatedEnd = isRegulatedStateLabel(analysis.emotional_shift.end_state);
+  const noStressors = analysis.stressors.length === 0;
+  const explicitlySupported = hasExplicitEmotionSupport(normalized, analysis.raw_text);
+  const evidenced = analysis.evidence_spans.some(
+    (item) =>
+      (item.type === "emotion" || item.type === "stressor") &&
+      normalizeConceptLabel(item.label) === normalized &&
+      !isSafetySensitiveText(item.text)
+  );
+
+  if (
+    ["unsettled", "tense", "anxious", "burdened", "overwhelmed", "sad", "drained", "fearful", "alarmed", "angry", "hostile", "reactive"].includes(
+      normalized
+    ) &&
+    regulatedStart &&
+    regulatedEnd &&
+    noStressors &&
+    !explicitlySupported &&
+    !evidenced
+  ) {
+    return false;
+  }
+
+  if (
+    ["unsettled", "tense", "anxious", "burdened", "overwhelmed", "sad", "drained", "fearful", "alarmed", "angry", "hostile", "reactive"].includes(
+      normalized
+    ) &&
+    !explicitlySupported &&
+    !evidenced &&
+    noStressors
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function shouldPromoteTopic(label: string) {
@@ -2226,7 +2442,7 @@ function isEvidenceLabelMatch(label: string, evidence: string) {
   }
 
   if (normalizedLabel === "creative progress" || normalizedLabel === "creative momentum") {
-    return /(app|portfolio|project|build(?:ing)?|competition|handshake|atlas journal|studio moonfall|gateway)/i.test(evidence);
+    return hasExplicitCreativeProjectLanguage(evidence);
   }
 
   if (normalizedLabel === "productive progress" || normalizedLabel === "productivity") {
@@ -2318,6 +2534,92 @@ function isEvidenceLabelMatch(label: string, evidence: string) {
   }
 
   return normalizedEvidence.includes(normalizedLabel.replace(/\s+/g, " "));
+}
+
+function buildEmotionEvidenceRows(
+  emotionLabels: string[],
+  signals: StateSignal[]
+): JournalAnalysis["evidence_spans"] {
+  return unique(
+    emotionLabels
+      .map((label) => normalizeConceptLabel(label))
+      .filter(Boolean)
+      .map((label) => {
+        const strongestSignal = [...signals]
+          .filter((signal) => normalizeConceptLabel(signal.label) === label)
+          .sort((a, b) => b.weight - a.weight)[0];
+
+        return strongestSignal
+          ? JSON.stringify({
+              text: quoteSupportingEvidence(strongestSignal.evidence),
+              type: "emotion" as const,
+              label
+            })
+          : null;
+      })
+      .filter((item): item is string => Boolean(item))
+  ).map((item) => JSON.parse(item) as JournalAnalysis["evidence_spans"][number]);
+}
+
+function findKeywordEvidenceText(keyword: string, sentences: SentenceSignal[], entry: string) {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const keywordPattern =
+    keyword.includes(" ")
+      ? new RegExp(escaped, "i")
+      : new RegExp(`\\b${escaped}\\b`, "i");
+
+  const sentenceMatch = sentences.find((sentence) => keywordPattern.test(getSegmentContextText(sentence)));
+  if (sentenceMatch) return getSegmentContextText(sentenceMatch);
+
+  return keywordPattern.test(entry) ? entry : "";
+}
+
+function findTopicEvidenceText(
+  topic: string,
+  entry: string,
+  sentences: SentenceSignal[],
+  signals: StateSignal[],
+  supports: JournalAnalysis["supports"],
+  copingActions: JournalAnalysis["coping_actions"],
+  stressors: JournalAnalysis["stressors"]
+) {
+  const supportEvidence = supports.find((item) => normalizePromotedConcept(item.label, item.evidence, "topic") === topic)?.evidence;
+  if (supportEvidence) return supportEvidence;
+
+  const copingEvidence = copingActions.find((item) => normalizePromotedConcept(item.action, getCopingEvidenceText(item), "topic") === topic);
+  if (copingEvidence) return getCopingEvidenceText(copingEvidence);
+
+  const stressorEvidence = stressors.find((item) => normalizePromotedConcept(item.label, item.evidence, "topic") === topic)?.evidence;
+  if (stressorEvidence) return stressorEvidence;
+
+  const signalEvidence = signals.find((item) => isEvidenceLabelMatch(topic, item.evidence))?.evidence;
+  if (signalEvidence) return signalEvidence;
+
+  const sentenceEvidence = sentences.find((sentence) => isEvidenceLabelMatch(topic, getSegmentContextText(sentence)));
+  if (sentenceEvidence) return getSegmentContextText(sentenceEvidence);
+
+  return isEvidenceLabelMatch(topic, entry) ? entry : "";
+}
+
+function dedupeEvidenceSpans(items: JournalAnalysis["evidence_spans"]) {
+  const kept: JournalAnalysis["evidence_spans"] = [];
+
+  for (const item of items) {
+    if (
+      kept.some(
+        (existing) =>
+          existing.type === item.type &&
+          semanticLabelOverlap(existing.label, item.label) &&
+          phrasesSubstantiallyOverlap(existing.text, item.text)
+      )
+    ) {
+      continue;
+    }
+
+    kept.push(item);
+  }
+
+  return kept;
 }
 
 function dedupeByLabelAndEvidence<T extends { label: string; evidence: string }>(items: T[]) {
@@ -3081,12 +3383,12 @@ function extractEvents(entry: string) {
       });
     }
 
-    if ((/\b(finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|aced)\b/i.test(contextText) || hasProductiveProgress(contextText) || /\b(app|portfolio|project|competition|handshake|atlas journal|studio moonfall|gateway)\b/i.test(contextText)) && !negativeContext &&
+    if ((/\b(finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|aced)\b/i.test(contextText) || hasProductiveProgress(contextText) || hasExplicitCreativeProjectLanguage(contextText)) && !negativeContext &&
     !hostileOrViolentContext) {
       events.push({
         label: /\b(finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|aced)\b/i.test(contextText)
           ? "academic achievement"
-          : /\b(app|portfolio|project|competition|handshake|atlas journal|studio moonfall|gateway)\b/i.test(contextText)
+          : hasExplicitCreativeProjectLanguage(contextText)
             ? "creative progress"
             : "productive progress",
         category: /\b(finals?|semester|exam|exams|class|classes|grades?|straight a|straight as|aced)\b/i.test(contextText) ? "accomplishment" : "accomplishment",
@@ -3986,19 +4288,21 @@ function synthesizeInterpretation(
   const recurringTopics = deriveEntryTopics(entry, supports, copingActions, stressors, signals, primaryEmotion);
   const themes = deriveThemeLabels(supports, copingActions, stressors, recurringTopics, primaryEmotion);
 
-  const notablePhrases = unique([
+  const notablePhraseCandidates = [
     ...getCentralSentences(sentences)
       .filter((sentence) => isNotablePhraseCandidate(sentence.sentence))
-      .map((sentence) => ({ sentence: sentence.sentence, score: scoreNotablePhrase(sentence.sentence) + scoreSentenceStrength(sentence) * 0.35 }))
-      .sort((a, b) => b.score - a.score)
-      .filter((item) => item.score >= 1.7)
-      .slice(0, 2)
-      .map((item) => item.sentence),
-    findMatch(entry, /maybe that'?s enough/i) || null,
-    findMatch(entry, /didn't solve anything but felt more present/i) || null,
-    findMatch(entry, /in between versions of my life|in-between versions of my life/i) || null,
-    analysisLikeCoreLine(entry)
-  ]).filter((phrase) => phrase && phrase.length <= 160).slice(0, 2);
+      .map((sentence) => ({ sentence: sentence.sentence, score: scoreNotablePhrase(sentence.sentence) + scoreSentenceStrength(sentence) * 0.35 })),
+    ...(findMatch(entry, /maybe that'?s enough/i) ? [{ sentence: findMatch(entry, /maybe that'?s enough/i)!, score: 2.25 }] : []),
+    ...(findMatch(entry, /didn't solve anything but felt more present/i) ? [{ sentence: findMatch(entry, /didn't solve anything but felt more present/i)!, score: 2.2 }] : []),
+    ...(findMatch(entry, /in between versions of my life|in-between versions of my life/i)
+      ? [{ sentence: findMatch(entry, /in between versions of my life|in-between versions of my life/i)!, score: 2.15 }]
+      : []),
+    ...(analysisLikeCoreLine(entry) ? [{ sentence: analysisLikeCoreLine(entry)!, score: 2.05 }] : [])
+  ]
+    .filter((item) => item.sentence.length <= 160)
+    .filter((item) => item.score >= 1.7);
+
+  const notablePhrases = selectDistinctNotablePhrases(notablePhraseCandidates);
 
   const personalKeywords = unique([
     ...[
@@ -4029,22 +4333,83 @@ function synthesizeInterpretation(
     .slice(0, 5);
 
   const promotedEmotionEvidenceLabels = new Set(
-    [primaryEmotion, startState, reactionState, endState]
+    [primaryEmotion, ...secondaryEmotions, startState, reactionState, endState]
       .filter(Boolean)
       .map((item) => normalizeConceptLabel(item))
       .filter((item) => !isGenericArcLabel(item))
   );
 
+  const customEmotionTerms = selectDistinctCustomEmotionTerms(
+    unique(
+      sentences
+        .filter((sentence) => /(felt|more present|more than|waiting to understand|quiet enough to notice|came back to myself|enough|clearer|honest|still)/i.test(sentence.sentence))
+        .map((sentence) => sentence.sentence)
+    ),
+    {
+      primaryEmotion,
+      secondaryEmotions,
+      topics: recurringTopics,
+      themes,
+      notablePhrases
+    }
+  );
+
+  const evidenceSpans = dedupeEvidenceSpans([
+    ...stressors
+      .slice(0, 2)
+      .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
+      .map((item) => ({
+        text: quoteSupportingEvidence(item.evidence),
+        type: "stressor" as const,
+        label: normalizePromotedConcept(item.label, item.evidence, "stressor")
+      })),
+    ...supports
+      .slice(0, 2)
+      .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
+      .map((item) => ({
+        text: quoteSupportingEvidence(item.evidence),
+        type: "support" as const,
+        label: normalizePromotedConcept(item.label, item.evidence, "support")
+      })),
+    ...copingActions.slice(0, 2).map((item) => ({
+      text: quoteSupportingEvidence(getCopingEvidenceText(item)),
+      type: "coping" as const,
+      label: item.action
+    })),
+    ...restorativeSignals
+      .slice(0, 2)
+      .map((item: string) => {
+        const supportEvidence = supports.find((support) => describeRestorativeMoment(support.label, support.evidence) === item)?.evidence;
+        const sentenceEvidence = sentences.find((sentence) => describeRestorativeMoment(sentence.sentence, getSegmentContextText(sentence)) === item);
+        const evidence = supportEvidence ?? (sentenceEvidence ? getSegmentContextText(sentenceEvidence) : "");
+        return evidence ? { text: quoteSupportingEvidence(evidence), type: "restorative" as const, label: item } : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    ...buildEmotionEvidenceRows([primaryEmotion, ...secondaryEmotions], signals)
+      .filter((item) => promotedEmotionEvidenceLabels.has(normalizeConceptLabel(item.label)))
+      .slice(0, 4),
+    ...personalKeywords
+      .slice(0, 2)
+      .map((keyword) => {
+        const evidence = findKeywordEvidenceText(keyword, sentences, entry);
+        return evidence ? { text: quoteSupportingEvidence(evidence), type: "keyword" as const, label: keyword } : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    ...recurringTopics
+      .slice(0, 2)
+      .filter((topic) => ![primaryEmotion, ...secondaryEmotions, ...personalKeywords, ...supports.map((item) => item.label), ...stressors.map((item) => item.label)].some((item) => semanticLabelOverlap(topic, item)))
+      .map((topic) => {
+        const evidence = findTopicEvidenceText(topic, entry, sentences, signals, supports, copingActions, stressors);
+        return evidence ? { text: quoteSupportingEvidence(evidence), type: "topic" as const, label: topic } : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+  ]).slice(0, 8);
+
   return {
     summary,
     primaryEmotion,
     secondaryEmotions,
-    customEmotionTerms: unique([
-      ...sentences
-        .filter((sentence) => /(felt|more present|enough|in between|between versions|steady|lighter|heavy|off|calm|tender|raw|clearer|honest|still)/i.test(sentence.sentence))
-        .map((sentence) => sentence.sentence),
-      primaryEmotion
-    ]).slice(0, 6),
+    customEmotionTerms,
     joySources: unique([...supports.filter((item) => ["movement", "connection", "comfort", "resolution", "accomplishment", "routine"].includes(item.category)).map((item) => item.label)]).slice(0, 5),
     gratitudeMoments: unique([
       /grateful|thankful|appreciative/i.test(entry) ? "gratitude is named directly" : null,
@@ -4080,36 +4445,7 @@ function synthesizeInterpretation(
       /\btea\b/i.test(entry) ? "tea" : null
     ]),
     restorativeSignals,
-    evidenceSpans: unique([
-      ...stressors
-        .slice(0, 2)
-        .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
-        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "stressor" as const, label: normalizePromotedConcept(item.label, item.evidence, "stressor") })),
-      ...supports
-        .slice(0, 2)
-        .filter((item) => isEvidenceLabelMatch(item.label, item.evidence))
-        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "support" as const, label: normalizePromotedConcept(item.label, item.evidence, "support") })),
-      // The persisted evidence schema only supports emotion/stressor/support/topic/safety.
-      // Coping and restorative proof therefore rides through as support evidence rather than
-      // creating a parallel enum contract that db.ts / UI do not understand yet.
-      ...copingActions
-        .slice(0, 2)
-        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(getCopingEvidenceText(item)), type: "support" as const, label: item.action })),
-      ...restorativeSignals
-        .slice(0, 2)
-        .map((item: string) => {
-          const supportEvidence = supports.find((support) => describeRestorativeMoment(support.label, support.evidence) === item)?.evidence;
-          const sentenceEvidence = sentences.find((sentence) => describeRestorativeMoment(sentence.sentence, getSegmentContextText(sentence)) === item);
-          const evidence = supportEvidence ?? (sentenceEvidence ? getSegmentContextText(sentenceEvidence) : "");
-          return evidence ? JSON.stringify({ text: quoteSupportingEvidence(evidence), type: "support" as const, label: item }) : null;
-        })
-        .filter((item: string | null): item is string => Boolean(item)),
-      ...signals
-        .filter((item) => promotedEmotionEvidenceLabels.has(normalizeConceptLabel(item.label)))
-        .filter((item) => !isWeakEntityLabel(item.label))
-        .slice(0, 2)
-        .map((item) => JSON.stringify({ text: quoteSupportingEvidence(item.evidence), type: "emotion" as const, label: normalizeConceptLabel(item.label) }))
-    ]).map((item) => JSON.parse(item) as JournalAnalysis["evidence_spans"][number]),
+    evidenceSpans,
     notablePhrases,
     reflectionTags: unique([sanitizeBucketOutputLabel(primaryEmotion, "emotion"), ...themes, supports.length > 0 ? "grounding" : null, stressors.length > 0 ? "strain" : null])
       .filter(Boolean)
