@@ -10,6 +10,117 @@ type ResultsCardProps = {
   linkTags?: boolean;
 };
 
+function normalizeLooseText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function phrasesSubstantiallyOverlap(a: string, b: string) {
+  const normalizedA = normalizeLooseText(a);
+  const normalizedB = normalizeLooseText(b);
+
+  if (!normalizedA || !normalizedB) return false;
+  if (normalizedA === normalizedB) return true;
+
+  const [shorter, longer] =
+    normalizedA.length <= normalizedB.length ? [normalizedA, normalizedB] : [normalizedB, normalizedA];
+
+  if (shorter.length >= 16 && longer.includes(shorter)) return true;
+
+  const shorterWords = shorter.split(" ").filter(Boolean);
+  const longerWords = new Set(longer.split(" ").filter(Boolean));
+  const overlapCount = shorterWords.filter((word) => longerWords.has(word)).length;
+
+  return shorterWords.length >= 4 && overlapCount / shorterWords.length >= 0.8;
+}
+
+function semanticLabelOverlap(a: string, b: string) {
+  const normalizedA = normalizeLooseText(a);
+  const normalizedB = normalizeLooseText(b);
+
+  if (!normalizedA || !normalizedB) return false;
+  if (normalizedA === normalizedB) return true;
+
+  const [shorter, longer] =
+    normalizedA.length <= normalizedB.length ? [normalizedA, normalizedB] : [normalizedB, normalizedA];
+
+  return shorter.length >= 6 && longer.includes(shorter);
+}
+
+function isPhraseLikeLanguage(text: string) {
+  const normalized = normalizeLooseText(text);
+  const wordCount = normalized.split(" ").filter(Boolean).length;
+
+  return wordCount >= 3;
+}
+
+function buildTopicsAndThemes(analysis: JournalAnalysis) {
+  const blocked = [
+    analysis.primary_emotion,
+    ...analysis.secondary_emotions,
+    ...analysis.supports.map((item) => item.label),
+    ...analysis.stressors.map((item) => item.label),
+    ...analysis.personal_keywords
+  ].filter(Boolean);
+
+  const candidates = [...(analysis.recurring_topics ?? []), ...(analysis.themes ?? []), ...(analysis.reflection_tags ?? [])]
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => !/^(fearful|scared|relieved|grounded|present|steady|watchful|curious|sad|tense|burdened|stress|strain)$/i.test(item))
+    .filter((item) => !blocked.some((blockedItem) => semanticLabelOverlap(item, blockedItem)));
+
+  const prioritized = [...candidates].sort((a, b) => {
+    const score = (value: string) => {
+      let total = 0;
+      if (/\b(social connection|home safety|reappraisal|self-regulation|family|friendship|creativity|school|money|boundaries|caregiving|recovery|productivity|academic achievement|investigation|watchfulness)\b/i.test(value)) {
+        total += 3;
+      }
+      if (value.includes(" ")) total += 1;
+      return total;
+    };
+
+    return score(b) - score(a) || b.length - a.length;
+  });
+
+  const kept: string[] = [];
+
+  for (const candidate of prioritized) {
+    if (kept.some((item) => semanticLabelOverlap(item, candidate))) continue;
+    kept.push(candidate);
+    if (kept.length >= 6) break;
+  }
+
+  return kept;
+}
+
+function buildNotableLanguage(analysis: JournalAnalysis) {
+  const blockedSingleTerms = [analysis.primary_emotion, ...analysis.secondary_emotions].map((item) => normalizeLooseText(item));
+  const candidates = [
+    ...analysis.notable_phrases.map((item) => ({ text: item.trim(), score: 3 })),
+    ...analysis.custom_emotion_terms
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .filter((item) => isPhraseLikeLanguage(item))
+      .filter((item) => !blockedSingleTerms.includes(normalizeLooseText(item)))
+      .map((item) => ({ text: item, score: 2 }))
+  ]
+    .filter((item) => item.text)
+    .sort((a, b) => b.score - a.score || b.text.length - a.text.length);
+
+  const kept: string[] = [];
+
+  for (const candidate of candidates) {
+    if (kept.some((item) => phrasesSubstantiallyOverlap(item, candidate.text))) continue;
+    kept.push(candidate.text);
+    if (kept.length >= 3) break;
+  }
+
+  return kept;
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="stat-chip">
@@ -70,16 +181,8 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
   const displayMood = analysis.user_mood ?? analysis.mood_score;
   const displayStress = analysis.user_stress ?? analysis.stress_level;
   const displayEnergy = analysis.user_energy ?? analysis.energy_level;
-  const mergedTags = Array.from(
-    new Map(
-      [...(analysis.themes ?? []), ...(analysis.reflection_tags ?? [])]
-        .filter(Boolean)
-        .map((item) => {
-          const clean = item.trim();
-          return [clean.toLowerCase(), clean];
-        })
-    ).values()
-  );
+  const topicsAndThemes = buildTopicsAndThemes(analysis);
+  const notableLanguage = buildNotableLanguage(analysis);
   const safetyLevel = analysis.safety_assessment.level;
   const isHighConcern = safetyLevel === "high";
   const isModerateConcern = safetyLevel === "moderate";
@@ -233,40 +336,6 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
             </div>
           </article>
 
-          <article className="detail-panel reveal-panel">
-            <SectionTitle
-              title="Entry topics"
-              hint="What this entry is mainly about."
-            />
-            <div className="tag-row results-tag-row">
-              {analysis.recurring_topics.length > 0 ? (
-                analysis.recurring_topics.map((item) => (
-                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
-                ))
-              ) : (
-                <span className="muted-text">This entry does not surface a strong concept-level topic beyond the broader themes below.</span>
-              )}
-            </div>
-          </article>
-
-          {!isModerateConcern ? (
-          <article className="detail-panel reveal-panel">
-            <SectionTitle
-              title="Personal keywords"
-              hint="Personal anchors from the writing itself: meaningful phrases, names, places, or motifs worth noticing over time."
-            />
-            <div className="tag-row">
-              {analysis.personal_keywords.length > 0 ? (
-                analysis.personal_keywords.map((item) => (
-                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
-                ))
-              ) : (
-                <span className="muted-text">No especially strong personal anchor stood out yet.</span>
-              )}
-            </div>
-          </article>
-          ) : null}
-
           {!isModerateConcern ? (
             <article className="detail-panel reveal-panel">
               <SectionTitle
@@ -285,6 +354,58 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
                 )}
               </div>
             </article>
+          ) : null}
+
+          {!isModerateConcern ? (
+          <article className="detail-panel reveal-panel">
+              <SectionTitle
+                title="Notable language"
+                hint="Emotionally meaningful wording from the entry itself, combining standout phrases and distinctive user language."
+              />
+              {notableLanguage.length > 0 ? (
+                <ul className="phrase-list">
+                  {notableLanguage.map((phrase) => (
+                    <li key={phrase}>{phrase}</li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="muted-text">No especially distinctive language stood out beyond the core analysis cards.</span>
+              )}
+            </article>
+          ) : null}
+
+          <article className="detail-panel reveal-panel">
+            <SectionTitle
+              title="Topics & themes"
+              hint="The broader concepts and patterns this entry connects to, combining topics, themes, and reflection tags into one cleaner view."
+            />
+            <div className="tag-row">
+              {topicsAndThemes.length > 0 ? (
+                topicsAndThemes.map((item) => (
+                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
+                ))
+              ) : (
+                <span className="muted-text">No broader topic or pattern stood out strongly enough beyond the main analysis cards.</span>
+              )}
+            </div>
+          </article>
+
+          {!isModerateConcern ? (
+          <article className="detail-panel reveal-panel">
+            <SectionTitle
+              title="Personal keywords"
+              hint="Personal anchors from the writing itself: meaningful names, places, objects, or recurring motifs worth noticing over time."
+            />
+            <div className="tag-row">
+              {analysis.personal_keywords.length > 0 ? (
+                analysis.personal_keywords.map((item) => (
+                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
+                ))
+              ) : (
+                <span className="muted-text">No especially strong personal anchor stood out yet.</span>
+              )}
+            </div>
+          </article>
           ) : null}
 
           {!isModerateConcern ? (
@@ -309,52 +430,6 @@ export function ResultsCard({ analysis, archiveBasePath = "/archive", linkTags =
                 )}
               </div>
             </article>
-          ) : null}
-
-          <article className="detail-panel reveal-panel">
-              <SectionTitle
-                title="Themes and tags"
-                hint="Broader ideas this entry connects to."
-              />
-              <div className="tag-row">
-                {mergedTags.map((item) => (
-                  <FilterTag key={item} label={item} href={`${archiveBasePath}?q=${encodeURIComponent(item)}`} linkTags={linkTags} />
-                ))}
-              </div>
-            </article>
-
-          {!isModerateConcern ? (
-            <article className="detail-panel reveal-panel">
-              <SectionTitle
-                title="Notable phrases"
-                hint="The line or two that best capture the entry's core energy."
-              />
-              <ul className="phrase-list">
-                {analysis.notable_phrases.map((phrase) => (
-                  <li key={phrase}>{phrase}</li>
-                ))}
-              </ul>
-            </article>
-          ) : null}
-
-          {!isModerateConcern ? (
-          <article className="detail-panel reveal-panel">
-            <SectionTitle
-              title="Custom emotion language"
-              hint="Emotion wording preserved from the entry when it adds useful nuance beyond the headline emotion."
-            />
-              <div className="tag-row results-tag-row">
-              {analysis.custom_emotion_terms.length > 0 ? (
-                analysis.custom_emotion_terms.map((item) => (
-                  <span key={item} className="tag">
-                    {item}
-                  </span>
-                ))
-              ) : (
-                <span className="muted-text">No more specific emotion wording stood out beyond the main emotion tags.</span>
-              )}
-            </div>
-          </article>
           ) : null}
         </div>
       )}
